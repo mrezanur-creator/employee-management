@@ -1,8 +1,21 @@
-# EmployeeManagement
-Employee Management System is a basic CRUD Restful API created using Java, Spring Boot, Spring Data JPA, and MySQL.
+# Employee Management System
 
-A detailed explanation of the implementation of this project is present here- 
-https://medium.com/@gauravshah97/create-a-basic-crud-restful-api-using-java-springboot-spring-data-jpa-and-mysql-b522890815a4
+This is my personal Spring Boot project for learning:
 
-Reach me out at- 
-https://www.linkedin.com/in/gauravshah97/
+- Spring Boot
+- Spring Data JPA
+- Unit Testing with JUnit & Mockito
+- Git & GitHub workflow
+
+## Features
+- Create Employee
+- Read Employee
+- Update Employee
+- Delete Employee
+- Unit Tested Service Layer
+
+## Tech Stack
+- Java 25
+- Spring Boot
+- MySQL
+- Maven
