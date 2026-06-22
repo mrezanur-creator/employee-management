@@ -1,28 +1,52 @@
-name: Java CI - Spring Boot
+name: Java CI with Maven + JaCoCo
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 25
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 25
-        cache: maven
+      # 2. Set up Java (pakai 25 error di CI nya)
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
-    - name: Show Java version
-      run: java -version
+      # 3. Cache Maven (biar build lebih cepat)
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
 
-    - name: Build & Run Tests
-      run: mvn clean test
+      # 4. Run tests + coverage
+      - name: Build and test with Maven
+        run: mvn clean verify
+
+      # 5. Upload JaCoCo report (optional tapi bagus)
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          
+       - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports     
+          
+       - name: Print surefire logs
+        if: failure()
+        run: cat target/surefire-reports/*.txt || true   
