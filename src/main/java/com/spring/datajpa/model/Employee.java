@@ -1,5 +1,9 @@
 package com.spring.datajpa.model;
 
+
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -9,17 +13,25 @@ import jakarta.persistence.Table;
 @Table(name = "employee")
 public class Employee {
 
-	@Id
-	private int id;
 	
+	@Id
+	@NotNull
+	private Integer id;
+	
+
 	@Column(name = "employee_name")
+	@NotBlank
 	private String employeeName;
 	
+
 	@Column(name = "designation")
+	@NotBlank
 	private String designation;
 	
+
 	@Column(name = "experience")
-	private double experience;
+	@NotNull
+	private Double experience;
 
 	public Employee() {
 		super();

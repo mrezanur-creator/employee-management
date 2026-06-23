@@ -35,7 +35,7 @@ class EmployeeControllerTest {
         Employee emp = new Employee();
         emp.setId(1);
         emp.setEmployeeName("Reza");
-
+        emp.setExperience(5);
         when(employeeService.addEmployee(any(Employee.class))).thenReturn(emp);
 
         mockMvc.perform(post("/api/employee")
@@ -48,11 +48,23 @@ class EmployeeControllerTest {
     // 2. GET ALL
     @Test
     void getAllEmployees() throws Exception {
+
+        Employee emp = new Employee();
+        emp.setId(1);
+        emp.setEmployeeName("Reza");
+        emp.setDesignation("Dev");
+        emp.setExperience(5);
+
         when(employeeService.getAllEmployees())
-                .thenReturn(List.of(new Employee()));
+                .thenReturn(List.of(emp));
 
         mockMvc.perform(get("/api/employees"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].employeeName").value("Reza"))
+                .andExpect(jsonPath("$[0].designation").value("Dev"))
+                .andExpect(jsonPath("$[0].experience").value(5));
     }
 
     // 3. GET BY ID
@@ -60,6 +72,9 @@ class EmployeeControllerTest {
     void getEmployeeById() throws Exception {
         Employee emp = new Employee();
         emp.setId(1);
+        emp.setEmployeeName("Reza");
+        emp.setDesignation("Dev");
+        emp.setExperience(5);
 
         when(employeeService.getEmployeeById(1))
                 .thenReturn(Optional.of(emp));
@@ -74,6 +89,7 @@ class EmployeeControllerTest {
         Employee emp = new Employee();
         emp.setId(1);
         emp.setEmployeeName("Updated");
+        emp.setExperience(2);
 
         when(employeeService.updateEmployee(any(Employee.class)))
                 .thenReturn(emp);

@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import com.spring.datajpa.model.Employee;
 import com.spring.datajpa.repository.EmployeeRepository;
 
+import jakarta.persistence.EntityNotFoundException;
+
 @Service
 public class EmployeeService {
 
@@ -43,7 +45,7 @@ public class EmployeeService {
 		 
     	Employee employee =
     	        employeeRepository.findById(inputEmployee.getId())
-    	        .orElseThrow(() -> new RuntimeException("Employee not found"));
+    	        .orElseThrow(() -> new EntityNotFoundException("Employee not found"));
 
 		/* bagian ini proses ganti data */
 		/* Employee updatedEmployee = employee.get(); */
