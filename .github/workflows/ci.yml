@@ -2,7 +2,7 @@ name: Java CI with Maven + JaCoCo
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master" , "feature-employee-update"]
   pull_request:
     branches: [ "main", "master" ]
 
