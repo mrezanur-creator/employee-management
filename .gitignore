@@ -4,3 +4,11 @@ target/
 .classpath
 .project
 *.log
+
+# GitHub Actions Runner
+actions-runner/
+
+Welcome12345678!!!!!
+
+
+git remote add origin https://github.com/mrezanur-creator/employee-management.git
