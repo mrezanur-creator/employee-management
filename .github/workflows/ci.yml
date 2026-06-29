@@ -45,16 +45,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Check env
+      - name: Debug final URL
         run: |
-            echo "${{ secrets.GITEA_USERNAME }}"
-            echo "${{ secrets.GITEA_TOKEN != '' }}"    
+                echo "https://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management.git" 
       
       - name: Push current branch to Gitea
         shell: powershell
         run: |
-            git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management.git
-            git push -u gitea HEAD:${{ github.ref_name }}           
+            git remote set-url gitea https://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management.git
+            git push -u gitea HEAD:${{ github.ref_name }}         
 
       # 6. Build Docker Image
       - name: Build Docker Image
