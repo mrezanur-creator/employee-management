@@ -82,7 +82,7 @@ jobs:
             name: surefire-reports
             path: target/surefire-reports
 
-    # 10. Print surefire logs
+    # 10. Print surefire logs1
       - name: Print surefire logs
         if: failure()
         shell: powershell
