@@ -49,7 +49,7 @@ jobs:
       - name: Push current branch to Gitea
         shell: powershell
         run: |
-            git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@${{ secrets.GITEA_REPO }}
+            git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@${{ secrets.GITEA_URL }}
             git push -u gitea HEAD:${{ github.ref_name }}           
 
       # 6. Build Docker Image
