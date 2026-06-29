@@ -45,6 +45,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
           
+      - name: Check env
+        run: |
+            echo "${{ secrets.GITEA_USERNAME }}"
+            echo "${{ secrets.GITEA_TOKEN != '' }}"    
       
       - name: Push current branch to Gitea
         shell: powershell
