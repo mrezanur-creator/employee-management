@@ -44,6 +44,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          
+      
+      - name: Push current branch to Gitea
+        shell: powershell
+        run: |
+            git remote remove gitea 2>$null
+            git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@${{ secrets.GITEA_REPO }}
+            git push -u gitea HEAD:${{ github.ref_name }}           
 
       # 6. Build Docker Image
       - name: Build Docker Image
@@ -67,10 +75,14 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: target/surefire-reports
+            name: surefire-reports
+            path: target/surefire-reports
 
-      # 10. Print surefire logs
+    # 10. Print surefire logs
       - name: Print surefire logs
         if: failure()
-        run: cat target/surefire-reports/*.txt || true
+        shell: powershell
+        run: |
+            if (Test-Path "target/surefire-reports") {
+              Get-Content target/surefire-reports/*.txt
+            }
