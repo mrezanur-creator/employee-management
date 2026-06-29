@@ -49,8 +49,6 @@ jobs:
       - name: Push current branch to Gitea
         shell: powershell
         run: |
-            git remote get-url gitea || echo "no gitea remote"
-            git remote remove gitea || true
             git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@${{ secrets.GITEA_REPO }}
             git push -u gitea HEAD:${{ github.ref_name }}           
 
