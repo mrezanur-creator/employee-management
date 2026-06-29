@@ -53,7 +53,7 @@ jobs:
         shell: powershell
         run: |
             git remote set-url gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management.git
-            git push -u gitea HEAD:${{ github.ref_name }}         
+            git push --force gitea HEAD:${{ github.ref_name }}         
 
       # 6. Build Docker Image
       - name: Build Docker Image
