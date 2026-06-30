@@ -49,34 +49,36 @@ jobs:
 
       # 6. Build Docker Image
       - name: Build Docker Image
+        shell: powershell
         run: |
           docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:latest .
 
       # 7. Push Docker Image
       - name: Push Docker Image
+        shell: powershell
         run: |
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:latest
 
         # Login OpenShift
       - name: Login OpenShift
+        shell: powershell
         run: |
-          oc login https://api.crc.testing:6443 \
-            --token=${{ secrets.OPENSHIFT_TOKEN }} \
-            --insecure-skip-tls-verify=true
+          oc login https://api.crc.testing:6443 --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
 
       # Import Image
       - name: Import Image
+        shell: powershell
         run: |
-          oc import-image employee-management \
-            --from=ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:latest \
-            --confirm
+          oc import-image employee-management --from=ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:latest --confirm
 
       # Restart Deployment
       - name: Restart Deployment
+        shell: powershell
         run: |
           oc rollout restart deployment employee-management  
         
       - name: Wait for Rollout
+        shell: powershell
         run: |
           oc rollout status deployment/employee-management
 
