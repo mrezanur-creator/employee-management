@@ -59,7 +59,7 @@ jobs:
         run: |
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:latest
 
-        # Login OpenShift
+        # Login OpenShift - CD Started
       - name: Login OpenShift
         shell: powershell
         run: |
