@@ -69,6 +69,7 @@ jobs:
 
       # 8. Upload JaCoCo report
       - name: Upload JaCoCo report
+        if: ${{ github.server_url == 'https://github.com' }}
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
@@ -76,7 +77,7 @@ jobs:
 
       # 9. Upload test report (only if failure)
       - name: Upload test report
-        if: failure()
+        if: ${{ failure() && github.server_url == 'https://github.com' }}
         uses: actions/upload-artifact@v4
         with:
             name: surefire-reports
