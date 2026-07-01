@@ -1,0 +1,12 @@
+replicaCount: 1
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/employee-management/employee-management
+  tag: latest
+  pullPolicy: Always
+
+spring:
+  profiles: docker
+  datasource:
+    url: jdbc:mysql://mysql-service.mysql-prod.svc.cluster.local:3306/employeemanagement
+    username: root
+    password: welcome1
