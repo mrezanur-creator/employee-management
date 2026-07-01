@@ -1,133 +1,117 @@
-name: Build and Deploy Employee Management
+name: Employee Management CI
 
 on:
   push:
     branches:
       - main
-      - master
       - feature-employee-update
-    tags:
-      - 'v*'
-
-permissions:
-  contents: read
-  packages: write
 
 env:
   IMAGE_NAME: employee-management
   CHART_PATH: helm/employee-management
 
 jobs:
+
   build:
+
     runs-on: self-hosted
 
     steps:
 
-      # Checkout
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      # Setup Java
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 25
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 25
 
-      # Cache Maven
-      - name: Cache Maven Repository
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+    - name: Cache Maven
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: maven-${{ hashFiles('**/pom.xml') }}
 
-      # Build
-      - name: Build and Test
-        run: mvn clean verify
+    - name: Build
+      run: mvn clean verify
 
-      # Get Version from Git Tag
-      - name: Get Version
-        id: version
-        shell: powershell
-        run: |
-          if ("${{ gitea.ref }}" -match "^refs/tags/v") {
-            $version="${{ gitea.ref_name }}"
-          } else {
-            $version=(git describe --tags --abbrev=0).Replace("v","")
-          }
+    ################################################
+    ## Generate Version
+    ################################################
 
-          Write-Host "Version : $version"
+    - name: Generate Image Version
+      shell: powershell
+      run: |
 
-          echo "IMAGE_VERSION=$version" >> $env:GITHUB_ENV
+        $sha=(git rev-parse --short HEAD)
 
-      # Login GHCR
-      - name: Login GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
+        $version="1.0.$sha"
 
-      # Build Docker Image
-      - name: Build Docker Image
-        shell: powershell
-        run: |
-          docker build `
-            -t ghcr.io/${{ secrets.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }} `
-            .
+        echo "IMAGE_VERSION=$version" >> $env:GITHUB_ENV
 
-      # Push Docker Image
-      - name: Push Docker Image
-        shell: powershell
-        run: |
-          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+        Write-Host "Version = $version"
 
-      # Update Chart.yaml
-      - name: Update Chart.yaml
-        shell: powershell
-        run: |
+    ################################################
+    ## Docker
+    ################################################
 
-          (Get-Content "${{ env.CHART_PATH }}/Chart.yaml") `
-          -replace 'appVersion:.*','appVersion: "'+$env:IMAGE_VERSION+'"' |
-          Set-Content "${{ env.CHART_PATH }}/Chart.yaml"
+    - name: Login GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ secrets.GHCR_USERNAME }}
+        password: ${{ secrets.GHCR_TOKEN }}
 
-      # Update values.yaml
-      - name: Update values.yaml
-        shell: powershell
-        run: |
+    - name: Build Docker
+      shell: powershell
+      run: |
 
-          (Get-Content "${{ env.CHART_PATH }}/values.yaml") `
-          -replace 'tag:.*','  tag: "'+$env:IMAGE_VERSION+'"' |
-          Set-Content "${{ env.CHART_PATH }}/values.yaml"
+        docker build `
+        -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }} `
+        .
 
-      # Helm Lint
-      - name: Helm Lint
-        run: |
-          helm lint ${{ env.CHART_PATH }}
+    - name: Push Docker
+      shell: powershell
+      run: |
 
-      # Package Helm Chart
-      - name: Helm Package
-        shell: powershell
-        run: |
-          helm package ${{ env.CHART_PATH }}
+        docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }}
 
-      # Update Helm Repo
-      - name: Helm Repo Update
-        run: |
-          helm repo update
+    ################################################
+    ## Update Helm
+    ################################################
 
-      # Read Chart Version
-      - name: Read Chart Version
-        id: chart
-        shell: powershell
-        run: |
-          $chartVersion = (Select-String '^version:' "${{ env.CHART_PATH }}/Chart.yaml").Line.Split(":")[1].Trim()
-          echo "CHART_VERSION=$chartVersion" >> $env:GITHUB_ENV
+    - name: Update values.yaml
+      shell: powershell
+      run: |
 
-      # Push Helm Chart
-      - name: Push Helm Chart
-        shell: powershell
-        run: |
-          helm cm-push employee-management-${{ env.CHART_VERSION }}.tgz employee-management
+        (Get-Content "${{ env.CHART_PATH }}/values.yaml") `
+        -replace 'tag:.*','  tag: "'+$env:IMAGE_VERSION+'"' |
+        Set-Content "${{ env.CHART_PATH }}/values.yaml"
+
+    ################################################
+    ## Helm
+    ################################################
+
+    - name: Helm Lint
+      run: helm lint ${{ env.CHART_PATH }}
+
+    - name: Helm Package
+      run: helm package ${{ env.CHART_PATH }}
+
+    - name: Helm Repo Update
+      run: helm repo update
+
+    - name: Read Chart Version
+      shell: powershell
+      run: |
+
+        $chart=(Select-String '^version:' "${{ env.CHART_PATH }}/Chart.yaml").Line.Split(":")[1].Trim()
+
+        echo "CHART_VERSION=$chart" >> $env:GITHUB_ENV
+
+    - name: Push Helm Chart
+      shell: powershell
+      run: |
+
+        helm cm-push employee-management-${{ env.CHART_VERSION }}.tgz employee-management
