@@ -2,10 +2,12 @@ name: Employee Management CI
 
 on:
   push:
-    branches:
-      - main
-      - feature-employee-update
+    branches: [ "main", "master", "feature-employee-update" ]
 
+permissions:
+  contents: read
+  packages: write
+  
 env:
   IMAGE_NAME: employee-management
   CHART_PATH: helm/employee-management
