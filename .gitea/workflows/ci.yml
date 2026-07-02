@@ -74,15 +74,15 @@ jobs:
       - name: Update values.yaml
         shell: powershell
         run: |
-          (Get-Content "${{ env.CHART_PATH }}/values.yaml") `
-          -replace 'tag:.*','  tag: "${{ steps.versioning.outputs.IMAGE_VERSION }}"' |
-          Set-Content "${{ env.CHART_PATH }}/values.yaml"
+          $path = "${{ env.CHART_PATH }}/values.yaml"
+          # Regex ini hanya mencari kata tag: lalu mengganti nilai di dalam tanda kutipnya saja
+          (Get-Content $path) -replace 'tag:\s*".*"', 'tag: "${{ steps.versioning.outputs.IMAGE_VERSION }}"' | Set-Content $path
           
       - name: Verify values.yaml
         shell: powershell
         run: |
-            Write-Host "===== values.yaml ====="
-            Get-Content "helm/employee-management/values.yaml"     
+          Write-Host "===== Hasil Update values.yaml ====="
+          Get-Content "${{ env.CHART_PATH }}/values.yaml"     
 
       # ------------------------------------------------
       # Helm Steps
