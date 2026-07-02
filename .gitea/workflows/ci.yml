@@ -41,11 +41,12 @@ jobs:
         id: versioning
         shell: powershell
         run: |
-          # github.run_number otomatis bernilai 1, 2, 3, 4, 5, dst.
-          $version="1.0.${{ github.run_number }}"
+          # Misal build ke-4, maka versi menjadi 0.1.4
+          # Ini akan menjamin nilai versi selalu naik +1 dan tidak akan kembar
+          $version="0.1.${{ github.run_number }}"
           
           Write-Output "::set-output name=IMAGE_VERSION::$version"
-          Write-Host "Version terpilih = $version"
+          Write-Host "Version Otomatis Baru = $version"
 
       # ------------------------------------------------
       # Docker
@@ -71,15 +72,22 @@ jobs:
       # ------------------------------------------------
       # Update Helm
       # ------------------------------------------------
-      - name: Update values.yaml
+      - name: Update Helm Files
         shell: powershell
         run: |
-          $path = "${{ env.CHART_PATH }}/values.yaml"
+          $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
+          $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # Regex ini menangkap spasi asli di depan (agar tidak merusak indentasi)
-          # lalu mengganti apa pun setelah kata 'tag:' menjadi "1.0.22"
-          (Get-Content $path) -replace '^(\s*tag:\s*).*$', ('$1' + '"${{ steps.versioning.outputs.IMAGE_VERSION }}"') | Set-Content $path
+          # A. Update tag di values.yaml untuk Docker Image
+          (Get-Content $valuesPath) -replace '^(\s*tag:\s*).*$', ('$1' + '"' + $newVer + '"') | Set-Content $valuesPath
           
+          # B. Update version di Chart.yaml (Mencegah Error 409 saat cm-push)
+          (Get-Content $chartPath) -replace '^(\s*version:\s*).*$', ('$1' + $newVer) | Set-Content $chartPath
+          
+          # C. Update appVersion di Chart.yaml (Sinkronisasi Label Aplikasi)
+          (Get-Content $chartPath) -replace '^(\s*appVersion:\s*).*$', ('$1' + '"' + $newVer + '"') | Set-Content $chartPath
+        
       - name: Verify values.yaml
         shell: powershell
         run: |
