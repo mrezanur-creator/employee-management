@@ -34,17 +34,20 @@ jobs:
 
       - name: Build
         run: mvn clean verify
-
-      # ------------------------------------------------
+# ------------------------------------------------
       # Generate Version
       # ------------------------------------------------
       - name: Generate Image Version
+        id: versioning # Kita beri ID di sini agar output-nya bisa dipanggil
         shell: powershell
         run: |
           $sha=(git rev-parse --short HEAD)
           $version="1.0.$sha"
-          "IMAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Version = $version"
+          
+          # Tulis langsung ke stdout runner menggunakan format workflow commands
+          echo "IMAGE_VERSION=$version" >> $env:GITHUB_OUTPUT
+          
+          Write-Host "Version terpilih = $version"
 
       # ------------------------------------------------
       # Docker
@@ -55,17 +58,17 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-
+    
+      # Panggil versi menggunakan format: steps.ID_STEP.outputs.NAMA_VARIABEL
       - name: Build Docker
         shell: powershell
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }} .
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }} .
 
       - name: Push Docker
         shell: powershell
         run: |
-          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }}
-
+          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }}
       # ------------------------------------------------
       # Update Helm
       # ------------------------------------------------
