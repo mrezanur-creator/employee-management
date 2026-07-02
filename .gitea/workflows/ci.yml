@@ -37,7 +37,7 @@ jobs:
             maven-
 
       - name: Build
-        run: mvn clean verify -Dmaven.repo.local=.m2/repository
+        run: mvn clean verify "-Dmaven.repo.local=.m2/repository"
 
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
