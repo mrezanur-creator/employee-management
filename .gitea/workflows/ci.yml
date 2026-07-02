@@ -75,8 +75,10 @@ jobs:
         shell: powershell
         run: |
           $path = "${{ env.CHART_PATH }}/values.yaml"
-          # Regex ini hanya mencari kata tag: lalu mengganti nilai di dalam tanda kutipnya saja
-          (Get-Content $path) -replace 'tag:\s*".*"', 'tag: "${{ steps.versioning.outputs.IMAGE_VERSION }}"' | Set-Content $path
+          
+          # Regex ini menangkap spasi asli di depan (agar tidak merusak indentasi)
+          # lalu mengganti apa pun setelah kata 'tag:' menjadi "1.0.22"
+          (Get-Content $path) -replace '^(\s*tag:\s*).*$', ('$1' + '"${{ steps.versioning.outputs.IMAGE_VERSION }}"') | Set-Content $path
           
       - name: Verify values.yaml
         shell: powershell
