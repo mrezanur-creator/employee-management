@@ -97,12 +97,18 @@ jobs:
         run: helm repo update
 
       - name: Read Chart Version
+        id: helm_versioning # Kita beri ID di sini
         shell: powershell
         run: |
+          # Membaca versi asli dari Chart.yaml
           $chart=(Select-String '^version:' "${{ env.CHART_PATH }}/Chart.yaml").Line.Split(":")[1].Trim()
-          "CHART_VERSION=$chart" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          
+          # Menggunakan Workflow Commands (Aman untuk Windows Runner)
+          Write-Output "::set-output name=CHART_VERSION::$chart"
+          Write-Host "Chart Version Terbaca = $chart"
 
       - name: Push Helm Chart
         shell: powershell
         run: |
-          helm cm-push employee-management-${{ env.CHART_VERSION }}.tgz employee-management
+          # Panggil menggunakan steps.helm_versioning.outputs.CHART_VERSION
+          helm cm-push employee-management-${{ steps.helm_versioning.outputs.CHART_VERSION }}.tgz employee-management
