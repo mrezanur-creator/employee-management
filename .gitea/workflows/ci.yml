@@ -112,14 +112,14 @@ jobs:
         if: github.event_name == 'push'
         shell: powershell
         run: |
-          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"          
+          # Ambil versi dan bersihkan dari spasi liar jika ada
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()         
           ssh root@100.103.175.35 "
             set -e
             
-            # 1. Tarik image dari GHCR masuk ke Registry Internal OpenShift (ImageStream)
-            # Ganti *** sesuai dengan target GHCR Anda kemarin
-            oc import-image employee-management:$newVer \
-              --from=ghcr.io/***/employee-management:$newVer \
+            # 1. KOREKSI: Gunakan format tanda kutip yang ketat untuk import-image
+            oc import-image employee-management:${newVer} \
+              --from='ghcr.io/***/employee-management:${newVer}' \
               --confirm \
               -n employee-management
 
@@ -127,11 +127,11 @@ jobs:
             helm repo add employee-management http://127.0.0.1:8080/employee-management
             helm repo update
             
-            # 3. Upgrade deployment dengan menembak tag versi baru yang sudah di-import
+            # 3. Upgrade deployment ke namespace 'employee-management'
             helm upgrade --install employee-management employee-management \
               --repo http://127.0.0.1:8080/employee-management \
               --namespace employee-management \
-              --set image.tag=$newVer \
+              --set image.tag=${newVer} \
               --atomic \
               --timeout 5m
 
