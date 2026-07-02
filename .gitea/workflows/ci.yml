@@ -116,13 +116,18 @@ jobs:
           ssh root@100.103.175.35 "
             set -e
             
-            # 1. Pastikan repo terdaftar terlebih dahulu di user root
+            # 1. Tarik image dari GHCR masuk ke Registry Internal OpenShift (ImageStream)
+            # Ganti *** sesuai dengan target GHCR Anda kemarin
+            oc import-image employee-management:$newVer \
+              --from=ghcr.io/***/employee-management:$newVer \
+              --confirm \
+              -n employee-management
+
+            # 2. Pastikan repo Helm terdaftar dan terupdate
             helm repo add employee-management http://127.0.0.1:8080/employee-management
-            
-            # 2. Update katalog helm lokal
             helm repo update
             
-            # 3. KORREKSI: Panggil nama chart-nya saja langsung tanpa awalan repo/
+            # 3. Upgrade deployment dengan menembak tag versi baru yang sudah di-import
             helm upgrade --install employee-management employee-management \
               --repo http://127.0.0.1:8080/employee-management \
               --namespace employee-management \
@@ -130,7 +135,7 @@ jobs:
               --atomic \
               --timeout 5m
 
-            # 4. Cetak log otomatis untuk verifikasi image yang terpasang
+            # 4. Cetak log otomatis untuk verifikasi
             echo '=================================================='
             echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
             oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
