@@ -15,6 +15,7 @@ env:
 jobs:
   build:
     runs-on: self-hosted
+    timeout-minutes: 10 # Jika dalam 10 menit job belum kelar, Gitea akan mematikan job ini secara paksa
 
     steps:
       - name: Checkout
@@ -26,14 +27,17 @@ jobs:
           distribution: temurin
           java-version: 25
 
-      - name: Cache Maven
+      - name: name: Cache Maven
         uses: actions/cache@v4
         with:
-          path: ~/.m2
+          # Kita simpan cache di dalam folder lokal proyek (bukan di user profile)
+          path: .m2/repository
           key: maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-
 
       - name: Build
-        run: mvn clean verify
+        run: mvn clean verify -Dmaven.repo.local=.m2/repository
 
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
@@ -100,3 +104,33 @@ jobs:
         run: |
           # Langsung memanggil versi dari ID versioning agar nama file sinkron sempurna
           helm cm-push employee-management-${{ steps.versioning.outputs.IMAGE_VERSION }}.tgz employee-management
+         
+      # ------------------------------------------------
+      # Deploy ke OpenShift via SSH (Menggunakan Helm)
+      # ------------------------------------------------
+      - name: Deploy to OpenShift
+        if: github.event_name == 'push'
+        shell: powershell
+        run: |
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"          
+          ssh root@100.103.175.35 "
+            set -e
+            
+            # 1. Update katalog helm lokal di server bastion
+            helm repo update
+            
+            # 2. Upgrade deployment ke namespace 'employee-management'
+            helm upgrade --install employee-management employee-management/employee-management \
+              --repo http://127.0.0.1:8080/employee-management \
+              --namespace employee-management \
+              --set image.tag=$newVer \
+              --atomic \
+              --timeout 5m
+
+            # 3. Cetak log otomatis untuk verifikasi image yang terpasang
+            echo '=================================================='
+            echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
+            oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
+            echo -e '\n=================================================='
+          "
+         
