@@ -27,7 +27,7 @@ jobs:
           distribution: temurin
           java-version: 25
 
-      - name: name: Cache Maven
+      - name: Cache Maven
         uses: actions/cache@v4
         with:
           # Kita simpan cache di dalam folder lokal proyek (bukan di user profile)
