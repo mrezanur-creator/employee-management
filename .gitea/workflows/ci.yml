@@ -116,10 +116,13 @@ jobs:
           ssh root@100.103.175.35 "
             set -e
             
-            # 1. Update katalog helm lokal di server bastion
+            # 1. Pastikan repo terdaftar terlebih dahulu di user root
+            helm repo add employee-management http://127.0.0.1:8080/employee-management
+            
+            # 2. Update katalog helm lokal
             helm repo update
             
-            # 2. Upgrade deployment ke namespace 'employee-management'
+            # 3. Upgrade deployment ke namespace 'employee-management'
             helm upgrade --install employee-management employee-management/employee-management \
               --repo http://127.0.0.1:8080/employee-management \
               --namespace employee-management \
@@ -127,7 +130,7 @@ jobs:
               --atomic \
               --timeout 5m
 
-            # 3. Cetak log otomatis untuk verifikasi image yang terpasang
+            # 4. Cetak log otomatis untuk verifikasi image yang terpasang
             echo '=================================================='
             echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
             oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
