@@ -78,6 +78,12 @@ jobs:
           (Get-Content "${{ env.CHART_PATH }}/values.yaml") `
           -replace 'tag:.*','  tag: "${{ steps.versioning.outputs.IMAGE_VERSION }}"' |
           Set-Content "${{ env.CHART_PATH }}/values.yaml"
+          
+      - name: Verify values.yaml
+        shell: powershell
+        run: |
+            Write-Host "===== values.yaml ====="
+            Get-Content "helm/employee-management/values.yaml"     
 
       # ------------------------------------------------
       # Helm Steps
