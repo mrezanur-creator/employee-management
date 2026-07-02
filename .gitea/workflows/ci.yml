@@ -59,8 +59,7 @@ jobs:
       - name: Build Docker
         shell: powershell
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }} 
-          .
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ env.IMAGE_VERSION }} .
 
       - name: Push Docker
         shell: powershell
