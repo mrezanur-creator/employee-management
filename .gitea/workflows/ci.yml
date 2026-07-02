@@ -122,8 +122,8 @@ jobs:
             # 2. Update katalog helm lokal
             helm repo update
             
-            # 3. Upgrade deployment ke namespace 'employee-management'
-            helm upgrade --install employee-management employee-management/employee-management \
+            # 3. KORREKSI: Panggil nama chart-nya saja langsung tanpa awalan repo/
+            helm upgrade --install employee-management employee-management \
               --repo http://127.0.0.1:8080/employee-management \
               --namespace employee-management \
               --set image.tag=$newVer \
