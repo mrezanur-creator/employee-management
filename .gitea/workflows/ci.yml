@@ -35,16 +35,15 @@ jobs:
       - name: Build
         run: mvn clean verify
       # ------------------------------------------------
-      # Generate Version
+      # Generate Version (Menggunakan Run Number Gitea)
       # ------------------------------------------------
       - name: Generate Image Version
-        id: versioning # Kita beri ID untuk dipanggil di step berikutnya
+        id: versioning
         shell: powershell
         run: |
-          $sha=(git rev-parse --short HEAD)
-          $version="1.0.$sha"
+          # github.run_number otomatis bernilai 1, 2, 3, 4, 5, dst.
+          $version="1.0.${{ github.run_number }}"
           
-          # Menggunakan Workflow Commands (Aman dari isu encoding PowerShell)
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version terpilih = $version"
 
@@ -89,7 +88,7 @@ jobs:
       # Helm Steps
       # ------------------------------------------------
       - name: Helm Lint
-        run: helm lint ${{ env.CHART_PATH }}
+        run: helm lint ${{ env.CHART_PATH }} --debug
 
       - name: Helm Package
         run: helm package ${{ env.CHART_PATH }}
