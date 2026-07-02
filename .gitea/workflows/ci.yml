@@ -112,20 +112,18 @@ jobs:
         if: github.event_name == 'push'
         shell: powershell
         run: |
-          # 1. Masukkan versi ke environment variable PowerShell agar bersih
-          $env:TARGET_VER = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()
+          # 1. Ambil nilai versi murni di PowerShell
+          $VERSION = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()
           
-          # 2. Jalankan SSH dengan mengirimkan variable tersebut ke Bash
+          # 2. Kirim perintah SSH dengan menyuntikkan langsung variabel $VERSION ke dalam string
           ssh root@100.103.175.35 "
             set -e
             
-            # Ambil nilai yang dilempar dari luar
-            VERSION='${env:TARGET_VER}'
-            echo 'Mengimport image untuk versi: '\$VERSION
+            echo 'Mengimport image untuk versi: $VERSION'
             
-            # 3. Jalankan import-image dengan string murni Bash (Tanpa gangguan intervensi PowerShell)
-            oc import-image employee-management:\$VERSION \
-              --from=ghcr.io/***/employee-management:\$VERSION \
+            # 3. Jalankan import-image (Nilai $VERSION akan otomatis berubah menjadi teks versi saat dikirim)
+            oc import-image employee-management:$VERSION \
+              --from=ghcr.io/***/employee-management:$VERSION \
               --confirm \
               -n employee-management
 
@@ -137,7 +135,7 @@ jobs:
             helm upgrade --install employee-management employee-management \
               --repo http://127.0.0.1:8080/employee-management \
               --namespace employee-management \
-              --set image.tag=\$VERSION \
+              --set image.tag=$VERSION \
               --atomic \
               --timeout 5m
 
@@ -146,5 +144,4 @@ jobs:
             echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
             oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
             echo -e '\n=================================================='
-          "
          
