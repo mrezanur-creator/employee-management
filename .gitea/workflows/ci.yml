@@ -34,19 +34,18 @@ jobs:
 
       - name: Build
         run: mvn clean verify
-# ------------------------------------------------
+      # ------------------------------------------------
       # Generate Version
       # ------------------------------------------------
       - name: Generate Image Version
-        id: versioning # Kita beri ID di sini agar output-nya bisa dipanggil
+        id: versioning # Kita beri ID untuk dipanggil di step berikutnya
         shell: powershell
         run: |
           $sha=(git rev-parse --short HEAD)
           $version="1.0.$sha"
           
-          # Tulis langsung ke stdout runner menggunakan format workflow commands
-          echo "IMAGE_VERSION=$version" >> $env:GITHUB_OUTPUT
-          
+          # Menggunakan Workflow Commands (Aman dari isu encoding PowerShell)
+          Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version terpilih = $version"
 
       # ------------------------------------------------
@@ -58,17 +57,18 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-    
-      # Panggil versi menggunakan format: steps.ID_STEP.outputs.NAMA_VARIABEL
+
       - name: Build Docker
         shell: powershell
         run: |
+          # Panggil menggunakan format steps.[ID_STEP].outputs.[NAMA_OUTPUT]
           docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }} .
 
       - name: Push Docker
         shell: powershell
         run: |
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }}
+
       # ------------------------------------------------
       # Update Helm
       # ------------------------------------------------
@@ -76,7 +76,7 @@ jobs:
         shell: powershell
         run: |
           (Get-Content "${{ env.CHART_PATH }}/values.yaml") `
-          -replace 'tag:.*','  tag: "'+$env:IMAGE_VERSION+'"' |
+          -replace 'tag:.*','  tag: "${{ steps.versioning.outputs.IMAGE_VERSION }}"' |
           Set-Content "${{ env.CHART_PATH }}/values.yaml"
 
       # ------------------------------------------------
