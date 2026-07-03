@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "employee-management.fullname" . }}
+  name: {{ include "employee-management-chart.fullname" . }}
   labels:
-    app: {{ include "employee-management.name" . }}
-    {{- include "employee-management.labels" . | nindent 4 }}
+    app: {{ include "employee-management-chart.name" . }}
+    {{- include "employee-management-chart.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -13,4 +13,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: {{ include "employee-management.name" . }}
+    app: {{ include "employee-management-chart.name" . }}

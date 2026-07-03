@@ -1,14 +1,14 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ include "employee-management.fullname" . }}
+  name: {{ include "employee-management-chart.fullname" . }}
   labels:
-    app: {{ include "employee-management.name" . }}
-    {{- include "employee-management.labels" . | nindent 4 }}
+    app: {{ include "employee-management-chart.name" . }}
+    {{- include "employee-management-chart.labels" . | nindent 4 }}
 spec:
   to:
     kind: Service
-    name: {{ include "employee-management.fullname" . }}
+    name: {{ include "employee-management-chart.fullname" . }}
     weight: 100
   port:
     targetPort: http
