@@ -71,20 +71,30 @@ jobs:
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }}
 
       # ------------------------------------------------
-      # Update values.yaml
+      # Update values.yaml & Chart.yaml secara fisik
       # ------------------------------------------------
-      - name: Update values.yaml
+      - name: Update Helm Files (values & Chart)
         shell: powershell
         run: |
-          $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath        
+          
+          # 1. Update tag di values.yaml
+          $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
+          (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
+          
+          # 2. Update version dan appVersion di Chart.yaml
+          $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
+          (Get-Content $chartPath) `
+            -replace 'version:.*', ("version: $newVer") `
+            -replace 'appVersion:.*', ("appVersion: `"$newVer`"") | Set-Content $chartPath
 
-      - name: Verify values.yaml
+      - name: Verify Helm Files
         shell: powershell
         run: |
           Write-Host "===== Hasil Update values.yaml ====="
-          Get-Content "${{ env.CHART_PATH }}/values.yaml"     
+          Get-Content "${{ env.CHART_PATH }}/values.yaml"
+          Write-Host "===== Hasil Update Chart.yaml ====="
+          Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
 
       # ------------------------------------------------
       # Helm Steps
@@ -94,7 +104,7 @@ jobs:
 
       - name: Helm Package
         run: |
-          helm package ${{ env.CHART_PATH }} --version ${{ steps.versioning.outputs.IMAGE_VERSION }} --app-version ${{ steps.versioning.outputs.IMAGE_VERSION }}
+          helm package ${{ env.CHART_PATH }}
 
       - name: Helm Repo Update
         run: helm repo update
