@@ -82,10 +82,10 @@ jobs:
           $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
           (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
           
-          # 2. Update version dan appVersion di Chart.yaml
+          # 2. Update version dan appVersion di Chart.yaml (Regex Diperbaiki)
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
-            -replace 'version:.*', ("version: $newVer") `
+            -replace '(?<=\b)version:.*', ("version: $newVer") `
             -replace 'appVersion:.*', ("appVersion: `"$newVer`"") | Set-Content $chartPath
 
       - name: Verify Helm Files
