@@ -34,4 +34,4 @@ spec:
               name: {{ include "employee-management-chart.fullname" . }}-secret
               key: datasource-password
         ports:
-        - containerPort: 8080
+        - containerPort: 8000
