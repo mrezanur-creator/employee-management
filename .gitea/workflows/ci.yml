@@ -147,7 +147,7 @@ jobs:
               --namespace employee-management \
               --set image.tag=$VERSION \
               --atomic \
-              --timeout 5m
+              --timeout 6m
 
             # 6. Cetak log verifikasi
             echo '=================================================='
