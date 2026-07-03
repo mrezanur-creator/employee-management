@@ -121,7 +121,7 @@ jobs:
             
             echo 'Mengimport image untuk versi: $VERSION'
             
-            # 3. Jalankan import-image (Nilai $VERSION akan otomatis berubah menjadi teks versi saat dikirim)
+            # 3. Jalankan import-image
             oc import-image employee-management:$VERSION \
               --from=ghcr.io/***/employee-management:$VERSION \
               --confirm \
@@ -144,4 +144,4 @@ jobs:
             echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
             oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
             echo -e '\n=================================================='
-         
+          "
