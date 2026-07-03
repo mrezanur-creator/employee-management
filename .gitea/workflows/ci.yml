@@ -121,9 +121,9 @@ jobs:
             
             echo 'Mengimport image untuk versi: $VERSION'
             
-            # 3. Jalankan import-image
+            # 3. Jalankan import-image dengan menyuntikkan Secret Gitea secara aman
             oc import-image employee-management:$VERSION \
-              --from=ghcr.io/***/employee-management:$VERSION \
+              --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
               --confirm \
               -n employee-management
 
