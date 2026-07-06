@@ -15,7 +15,7 @@ env:
 jobs:
   build:
     runs-on: self-hosted
-    timeout-minutes: 10 # Jika dalam 10 menit job belum kelar, Gitea akan mematikan job ini secara paksa
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -30,7 +30,6 @@ jobs:
       - name: Cache Maven
         uses: actions/cache@v4
         with:
-          # Kita simpan cache di dalam folder lokal proyek (bukan di user profile)
           path: .m2/repository
           key: maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
@@ -42,18 +41,21 @@ jobs:
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
       # ------------------------------------------------
+      # Catatan: Jika ingin otomatis naik terus, uncomment baris $version pertama
+      # dan comment baris hardcode "1.0.45"
       - name: Generate Image Version
         id: versioning
         shell: powershell
         run: |
-          #$version="1.0.${{ github.run_number }}"
-          $version="1.0.45"
+          # $version="1.0.${{ github.run_number }}"
+          $version="1.0.46"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
       # ------------------------------------------------
       # Docker Build & Push
       # ------------------------------------------------
+      # Memastikan artifact image siap ditarik oleh OpenShift
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
@@ -79,9 +81,9 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # 1. Update tag di values.yaml
-          #$valuesPath = "${{ env.CHART_PATH }}/values.yaml"
-          #(Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
+          # 1. Update tag di values.yaml (Uncomment jika image tag mau disinkronkan ke file)
+          # $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
+          # (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
           
           # 2. Update version dan appVersion di Chart.yaml (Regex Diperbaiki)
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
@@ -92,8 +94,6 @@ jobs:
       - name: Verify Helm Files
         shell: powershell
         run: |
-         # Write-Host "===== Hasil Update values.yaml ====="
-         # Get-Content "${{ env.CHART_PATH }}/values.yaml"
           Write-Host "===== Hasil Update Chart.yaml ====="
           Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
 
@@ -113,46 +113,56 @@ jobs:
       - name: Push Helm Chart
         shell: powershell
         run: |
-          # Langsung memanggil versi dari ID versioning agar nama file sinkron sempurna
           helm cm-push employee-management-${{ steps.versioning.outputs.IMAGE_VERSION }}.tgz employee-management
          
       # ------------------------------------------------
-      # Deploy ke OpenShift via SSH (Menggunakan Helm)
+      # Deploy ke OpenShift via SSH (Hanya Import Image)
       # ------------------------------------------------
       - name: Deploy to OpenShift
         if: github.event_name == 'push'
         shell: powershell
         run: |
-          # 1. Ambil nilai versi murni di PowerShell
           $VERSION = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()
           
-          # 2. Kirim perintah SSH dengan menyuntikkan langsung variabel $VERSION ke dalam string
           ssh root@100.103.175.35 "
             set -e
-            
             echo 'Mengimport image untuk versi: $VERSION'
             
-            # 3. Jalankan import-image dengan menyuntikkan Secret Gitea secara aman
             oc import-image employee-management:$VERSION \
               --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
               --confirm \
               -n employee-management
 
-            # 4. Pastikan repo Helm terdaftar dan terupdate
+            # Bagian helm upgrade dimatikan karena sudah ditangani penuh oleh GitOps ArgoCD
             helm repo add employee-management http://127.0.0.1:8080/employee-management
             helm repo update
-            
-            # 5. Upgrade deployment
-            helm upgrade --install employee-management employee-management \
-              --repo http://127.0.0.1:8080/employee-management \
-              --namespace employee-management \
-              --set image.tag=$VERSION \
-              --atomic \
-              --timeout 6m
-
-            # 6. Cetak log verifikasi
-            echo '=================================================='
-            echo 'DOCKER IMAGE YANG AKTIF SEKARANG DI OPENSHIFT:'
-            oc get deployment employee-management -n employee-management -o jsonpath='{.spec.template.spec.containers[*].image}'
-            echo -e '\n=================================================='
           "
+          
+      # ------------------------------------------------
+      # Otomatisasi Update Manifest GitOps
+      # ------------------------------------------------
+      - name: Update GitOps Repository
+        shell: powershell
+        env:
+          GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          
+          # 1. Konfigurasi Git Identity
+          git config --global user.email "ci-bot@gitea.local"
+          git config --global user.name "CI Bot"
+          
+          # 2. Clone Repositori GitOps
+          git clone http://ci-bot:${env:GITEA_TOKEN}@100.103.175.35:3000/gitops/gitops-config.git gitops-repo
+          
+          # 3. Masuk ke folder repo GitOps
+          cd gitops-repo
+          
+          # 4. Jalankan Regex untuk update targetRevision
+          $targetFile = "dev/apps/employee-management-apps.yaml"
+          (Get-Content $targetFile) -replace 'targetRevision:.*', "targetRevision: $newVer" | Set-Content $targetFile
+          
+          # 5. Commit dan Push Perubahan Kembali ke Gitea
+          git add $targetFile
+          git commit -m "chore(gitops): auto-update employee-management to version $newVer [skip ci]"
+          git push origin master
