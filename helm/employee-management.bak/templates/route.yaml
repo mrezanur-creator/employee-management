@@ -3,16 +3,13 @@ kind: Route
 metadata:
   name: {{ include "employee-management-chart.fullname" . }}
   labels:
+    app: {{ include "employee-management-chart.name" . }}
     {{- include "employee-management-chart.labels" . | nindent 4 }}
 spec:
-  host: {{ .Values.route.host | quote }}
-
   to:
     kind: Service
     name: {{ include "employee-management-chart.fullname" . }}
     weight: 100
-
   port:
     targetPort: http
-
   wildcardPolicy: None
