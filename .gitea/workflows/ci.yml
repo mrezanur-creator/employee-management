@@ -48,7 +48,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.46"
+          $version="1.0.47"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -158,9 +158,14 @@ jobs:
           # 3. Masuk ke folder repo GitOps
           cd gitops-repo
           
-          # 4. Jalankan Regex untuk update targetRevision
+          # 4. Jalankan Regex Dinamis untuk update targetRevision milik Helm Chart saja
           $targetFile = "dev/apps/employee-management-apps.yaml"
-          (Get-Content $targetFile) -replace 'targetRevision:.*', "targetRevision: $newVer" | Set-Content $targetFile
+          $content = Get-Content $targetFile -Raw
+
+          # Regex ini hanya mencari repoURL yang mengandung 'employee-management/', tanpa peduli IP/Port-nya
+          $pattern = "(repoURL:.*employee-management/[\s\S]*?targetRevision:\s*).*?"
+          $content = $content -replace $pattern, ("`${1}$newVer")
+          $content | Set-Content $targetFile
           
           # 5. Commit dan Push Perubahan Kembali ke Gitea
           git add $targetFile
