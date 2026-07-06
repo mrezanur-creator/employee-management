@@ -131,7 +131,7 @@ jobs:
               -n employee-management
 
             # Helm upgrade dimatikan karena sudah ditangani penuh oleh GitOps ArgoCD
-            helm repo add employee-management http://chartmuseum.local.env:8081/employee-management
+            helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
             helm repo update
           "
           
