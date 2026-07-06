@@ -30,13 +30,20 @@ jobs:
       - name: Cache Maven
         uses: actions/cache@v4
         with:
-          path: .m2/repository
+          #path: .m2/repository
+          #key: maven-${{ hashFiles('**/pom.xml') }}
+          #restore-keys: |
+           # maven-
+            
+      # Menggunakan jalur absolut agar plugin cache di Windows tidak bingung
+          path: ${{ github.workspace }}/.m2/repository
           key: maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            maven-
+            maven-      
 
       - name: Build
-        run: mvn clean verify "-Dmaven.repo.local=.m2/repository"
+        #run: mvn clean verify "-Dmaven.repo.local=.m2/repository"
+        run: mvn clean verify "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
 
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
@@ -46,7 +53,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.50"
+          $version="1.0.51"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
