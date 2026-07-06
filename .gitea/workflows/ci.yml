@@ -41,21 +41,18 @@ jobs:
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
       # ------------------------------------------------
-      # Catatan: Jika ingin otomatis naik terus, uncomment baris $version pertama
-      # dan comment baris hardcode "1.0.45"
       - name: Generate Image Version
         id: versioning
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.47"
+          $version="1.0.48"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
       # ------------------------------------------------
       # Docker Build & Push
       # ------------------------------------------------
-      # Memastikan artifact image siap ditarik oleh OpenShift
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
@@ -81,11 +78,11 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # 1. Update tag di values.yaml (Uncomment jika image tag mau disinkronkan ke file)
+          # 1. Update tag di values.yaml (Uncomment jika dibutuhkan)
           # $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
           # (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
           
-          # 2. Update version dan appVersion di Chart.yaml (Regex Diperbaiki)
+          # 2. Update version dan appVersion di Chart.yaml
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
             -replace '(?<=\b)version:.*', ("version: $newVer") `
@@ -133,7 +130,7 @@ jobs:
               --confirm \
               -n employee-management
 
-            # Bagian helm upgrade dimatikan karena sudah ditangani penuh oleh GitOps ArgoCD
+            # Helm upgrade dimatikan karena sudah ditangani penuh oleh GitOps ArgoCD
             helm repo add employee-management http://127.0.0.1:8080/employee-management
             helm repo update
           "
@@ -158,14 +155,26 @@ jobs:
           # 3. Masuk ke folder repo GitOps
           cd gitops-repo
           
-          # 4. Jalankan Regex Dinamis untuk update targetRevision milik Helm Chart saja
+          # 4. Perubahan Versi Dinamis Line-by-Line (Hanya targetRevision milik Helm Chart)
           $targetFile = "dev/apps/employee-management-apps.yaml"
-          $content = Get-Content $targetFile -Raw
+          $lines = Get-Content $targetFile
+          $foundRepo = $false
 
-          # Regex ini hanya mencari repoURL yang mengandung 'employee-management/', tanpa peduli IP/Port-nya
-          $pattern = "(repoURL:.*employee-management/[\s\S]*?targetRevision:\s*).*?"
-          $content = $content -replace $pattern, ("`${1}$newVer")
-          $content | Set-Content $targetFile
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+              # Cari baris repoURL yang mengandung employee-management/
+              if ($lines[$i] -match "repoURL:.*employee-management/") {
+                  $foundRepo = $true
+                  continue
+              }
+              
+              # Ganti baris targetRevision terdekat tepat di bawahnya
+              if ($foundRepo -and $lines[$i] -match "targetRevision:") {
+                  $lines[$i] = "      targetRevision: $newVer"
+                  $foundRepo = $false
+              }
+          }
+
+          $lines | Set-Content $targetFile
           
           # 5. Commit dan Push Perubahan Kembali ke Gitea
           git add $targetFile
