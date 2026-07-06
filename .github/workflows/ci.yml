@@ -29,7 +29,8 @@ jobs:
           git remote remove gitea 2>$null
 
           # Tambahkan remote Gitea
-          git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management2.git
+          #git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@100.103.175.35:3000/reza/employee-management2.git
+          git remote add gitea http://${{ secrets.GITEA_USERNAME }}:${{ secrets.GITEA_TOKEN }}@gitea.local.env:8081/reza/employee-management2.git
 
           # Push branch yang sedang aktif
           git push --force gitea HEAD:${{ github.ref_name }}
