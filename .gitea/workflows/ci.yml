@@ -47,7 +47,7 @@ jobs:
         shell: powershell
         run: |
           #$version="1.0.${{ github.run_number }}"
-          $version="1.0.44"
+          $version="1.0.45"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -80,8 +80,8 @@ jobs:
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
           # 1. Update tag di values.yaml
-          $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
-          (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
+          #$valuesPath = "${{ env.CHART_PATH }}/values.yaml"
+          #(Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
           
           # 2. Update version dan appVersion di Chart.yaml (Regex Diperbaiki)
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
@@ -92,8 +92,8 @@ jobs:
       - name: Verify Helm Files
         shell: powershell
         run: |
-          Write-Host "===== Hasil Update values.yaml ====="
-          Get-Content "${{ env.CHART_PATH }}/values.yaml"
+         # Write-Host "===== Hasil Update values.yaml ====="
+         # Get-Content "${{ env.CHART_PATH }}/values.yaml"
           Write-Host "===== Hasil Update Chart.yaml ====="
           Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
 
