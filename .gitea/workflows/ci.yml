@@ -54,7 +54,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.57"
+          $version="1.0.58"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -126,9 +126,9 @@ jobs:
       - name: Push Helm Chart Package back to GitHub
         shell: powershell
         env:
-          GH_TOKEN: ${{ secrets.GHCR_TOKEN }} # Gunakan token GitHub Anda yang punya akses write repo
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $newVer = "1.0.57"
           $packageName = "employee-management-$newVer.tgz"
           
           # 1. Buat folder khusus history jika belum ada
@@ -143,20 +143,29 @@ jobs:
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot Audit"
           
-          # 4. Tambahkan remote GitHub asli menggunakan Token
-          # Ganti 'username/repo' sesuai dengan repositori GitHub Anda
-          git remote remove github-origin 2>$null
-          git remote add github-origin https://x-access-token:${env:GH_TOKEN}@github.com/${{ secrets.GHCR_USERNAME }}/employee-management.git
+          # 4. Cek dan Tambahkan/Update remote GitHub tanpa memicu error
+          $hasRemote = git remote | Select-String "^github-origin$"
+          if ($hasRemote) {
+              git remote set-url github-origin "https://x-access-token:${env:GH_TOKEN}@github.com/${{ secrets.GHCR_USERNAME }}/employee-management.git"
+          } else {
+              git remote add github-origin "https://x-access-token:${env:GH_TOKEN}@github.com/${{ secrets.GHCR_USERNAME }}/employee-management.git"
+          }
           
           # 5. Tarik perubahan terbaru dulu agar tidak conflict saat push
-          git pull github-origin ${{ github.ref_name }} --rebase
+          git pull github-origin main --rebase
           
           # 6. Track file baru, commit dengan [skip ci], lalu push
           git add "helm-releases/$packageName"
-          git add "${{ env.CHART_PATH }}/Chart.yaml" # Ikut commit perubahan Chart.yaml fisik
+          git add "helm/employee-management/Chart.yaml"
           
-          git commit -m "chore(helm): release version $newVer [skip ci]"
-          git push github-origin HEAD:${{ github.ref_name }}        
+          # Validasi apakah ada perubahan sebelum melakukan commit agar tidak error "nothing to commit"
+          $gitStatus = git status --porcelain
+          if ($gitStatus) {
+              git commit -m "chore(helm): release version $newVer [skip ci]"
+              git push github-origin HEAD:main
+          } else {
+              Write-Host "Tidak ada perubahan baru untuk di-commit."
+          }     
          
       # ------------------------------------------------
       # Deploy ke OpenShift via SSH (Hanya Import Image)
