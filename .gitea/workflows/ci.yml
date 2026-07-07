@@ -146,10 +146,17 @@ jobs:
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot Audit"
           
-          # 4. Clone repositori File-History ke folder sementara 'history-repo'
+          # 4. Clone repositori File-History dengan aman tanpa mengotori Windows Credential Manager
           Write-Host "Cloning repo mrezanur-creator/File-History..."
-          git clone "https://x-access-token:${env:GH_TOKEN}@github.com/mrezanur-creator/File-History.git" history-repo
+          
+          # Kita gunakan flag -c http.extraHeader untuk menyuntikkan token secara langsung dan rapi
+          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("mrezanur-creator:${env:GH_TOKEN}"))
+          git -c http.extraHeader="Authorization: Basic $base64Auth" clone "https://github.com/mrezanur-creator/File-History.git" history-repo
+          
           cd history-repo
+          
+          # Daftarkan konfigurasi ekstraHeader agar proses push di bawah nanti otomatis terautentikasi
+          git config http.extraHeader "Authorization: Basic $base64Auth"
           
           # 5. Salin file .tgz ke folder 'helm-releases' di dalam repo history
           if (-not (Test-Path "helm-releases")) { 
