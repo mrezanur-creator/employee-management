@@ -25,3 +25,16 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
+rollout:
+  enabled: true
+
+  canary:
+    enabled: true
+
+    steps:
+      - setWeight: 20
+      - pause: {}
+      - setWeight: 50
+      - pause: {}
+      - setWeight: 100
