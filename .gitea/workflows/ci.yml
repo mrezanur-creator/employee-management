@@ -50,10 +50,9 @@ jobs:
       # Simpan Laporan JaCoCo Code Coverage ke Gitea
       # ------------------------------------------------
       - name: Upload JaCoCo Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3 # Ganti dari v4 ke v3
         with:
           name: jacoco-code-coverage-report
-          # Path standar tempat Maven menyimpan report HTML JaCoCo
           path: target/site/jacoco/
           retention-days: 7
 
