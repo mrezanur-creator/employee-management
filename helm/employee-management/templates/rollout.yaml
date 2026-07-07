@@ -10,11 +10,11 @@ spec:
   revisionHistoryLimit: 3
   selector:
     matchLabels:
-      {{- include "employee-management-chart.selectorLabels" . | nindent 6 }}
+      app: {{ include "employee-management-chart.name" . }}
   template:
     metadata:
       labels:
-        {{- include "employee-management-chart.selectorLabels" . | nindent 8 }}
+        app: {{ include "employee-management-chart.name" . }}
     spec:
       containers:
         - name: {{ .Chart.Name }}
@@ -45,14 +45,19 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
 
   strategy:
+    {{- if .Values.rollout.canary.enabled }}
     canary:
       stableService: {{ include "employee-management-chart.fullname" . }}
       canaryService: {{ include "employee-management-chart.fullname" . }}-canary
-      {{- if .Values.rollout.canary.enabled }}
       steps:
-        {{- toYaml .Values.rollout.canary.steps | nindent 8 }}
-      {{- else }}
-      steps:
-        - setWeight: 100
-      {{- end }}
+          - setWeight: 20
+            - pause: {}
+            - setWeight: 50
+            - pause: {}
+            - setWeight: 100
+    {{- else }}
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+    {{- end }}
   {{- end }}
