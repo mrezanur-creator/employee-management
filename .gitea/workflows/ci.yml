@@ -56,7 +56,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.70"
+          $version="1.0.71"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -286,6 +286,60 @@ jobs:
           } else {
               Write-Host "Tidak ada perubahan baru."
           }
+          # ------------------------------------------------
+          # Ekstrak & Kirim Metrik Coverage ke Prometheus Pushgateway
+          # ------------------------------------------------
+      - name: Push Coverage Metrics to Prometheus
+        shell: powershell
+        run: |
+              $xmlPath = "target/site/jacoco/jacoco.xml"
+          
+              if (Test-Path $xmlPath) {
+                  # 1. Load file XML JaCoCo
+                  [xml]$jacocoXml = Get-Content $xmlPath
+          
+                  # 2. Ambil counter tipe LINE (Baris Kode)
+                  $lineCounter = $jacocoXml.report.counter | Where-Object { $_.type -eq "LINE" }
+          
+                  if ($lineCounter) {
+                      $covered = [double]$lineCounter.covered
+                      $missed = [double]$lineCounter.missed
+                      $total = $covered + $missed
+          
+                      # 3. Hitung persentase Cakupan (Skala 0 - 100)
+                      $coveragePercent = [math]::Round(($covered / $total) * 100, 2)
+          
+                      # 4. Ambil versi aplikasi untuk dijadikan label tambahan (opsional)
+                      $appVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          
+                      # Pastikan output UTF-8 agar print log bersih
+                      [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+                      Write-Host "📊 Hasil Analisis JaCoCo XML:"
+                      Write-Host "   - Baris Ter-cover : $covered"
+                      Write-Host "   - Baris Terlewat  : $missed"
+                      Write-Host "   - Total Persentase: $coveragePercent %"
+          
+                      # 5. Format Payload teks sesuai standar ekspos Prometheus
+                      # Kita beri label 'application' agar mudah di-query di Grafana
+                      $payload = "jacoco_line_coverage_percent{application=`"employee-management``} $coveragePercent`n"
+          
+                      # 6. Kirim data via HTTP POST ke Pushgateway
+                      # SESUAIKAN URL & PORT PUSHGATEWAY LU DI SINI (Contoh port default: 9091)
+                      $pushgatewayUrl = "http://localhost:9091/metrics/job/gitea_artifacts/instance/localhost"
+          
+                      Write-Host "🚀 Mengirim data metrik ke Pushgateway ($pushgatewayUrl)..."
+                      try {
+                          Invoke-RestMethod -Uri $pushgatewayUrl -Method Post -Body $payload -ContentType "text/plain; charset=utf-8"
+                          Write-Host "✅ Berhasil mengirim metrik ke Grafana/Prometheus!"
+                      } catch {
+                          Write-Error "❌ Gagal mengirim RestMethod ke Pushgateway: $_"
+                      }
+                  } else {
+                      Write-Host "Warning: Counter tipe LINE tidak ditemukan di dalam XML."
+                  }
+              } else {
+                  Write-Host "❌ Error: File jacoco.xml tidak ditemukan! Pastikan target/site/jacoco/ telah terbuat."
+              }
       # ------------------------------------------------
       # Deploy ke OpenShift via SSH (Hanya Import Image)
       # ------------------------------------------------
