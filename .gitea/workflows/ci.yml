@@ -56,7 +56,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.65"
+          $version="1.0.66"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -166,7 +166,6 @@ jobs:
           git add "helm-releases/$packageName"
           
           # 6. Salin laporan JaCoCo HTML ke folder 'coverage-history/versi-angka'
-          # Path diasumsikan relatif dari folder history-repo ke target/site/jacoco proyek utama
           $jacocoPath = "../target/site/jacoco"
           if (Test-Path $jacocoPath) {
               $coverageDest = "coverage-history/$newVer"
@@ -176,6 +175,92 @@ jobs:
               Copy-Item -Path "$jacocoPath\*" -Destination $coverageDest -Recurse -Force
               git add "coverage-history/$newVer/*"
               Write-Host "Laporan JaCoCo berhasil disalin ke folder coverage-history/$newVer"
+          
+              # ----------------------------------------------------------------
+              # OTOMATISASI GENERATE DASHBOARD UTAMA (REKAP VERSI)
+              # ----------------------------------------------------------------
+              Write-Host "Memperbarui index Dashboard Utama..."
+          
+              # Ambil semua folder versi yang ada di dalam coverage-history
+              $allVersions = Get-ChildItem -Path "coverage-history" -Directory | Select-Object -ExpandProperty Name | Sort-Object {[version]$_} -Descending
+          
+              # Mulai susun struktur HTML untuk file index.html utama
+              $htmlContent = @"
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>JaCoCo Code Coverage History Dashboard</title>
+              <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+              <style>
+                  body { background-color: #f8f9fa; padding-top: 30px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                  .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
+                  .table-hover tbody tr:hover { background-color: #f1f3f5; }
+                  .header-title { color: #212529; font-weight: 700; margin-bottom: 20px; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="row justify-content-center">
+                      <div class="col-md-10">
+                          <div class="d-flex align-items-center justify-content-between mb-4">
+                              <h2 class="header-title">📊 JaCoCo Code Coverage History</h2>
+                              <span class="badge bg-primary">Last Updated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")</span>
+                          </div>
+          
+                          <div class="card p-4 mb-4">
+                              <h5 class="card-title text-secondary mb-3">Daftar Riwayat Build Proyek</h5>
+                              <div class="table-responsive">
+                                  <table class="table table-striped table-hover align-middle">
+                                      <thead class="table-dark">
+                                          <tr>
+                                              <th>#</th>
+                                              <th>Versi Aplikasi</th>
+                                              <th>Paket Helm (.tgz)</th>
+                                              <th class="text-end">Aksi Laporan</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+          "@
+          
+              # Loop untuk memasukkan daftar versi ke dalam baris tabel HTML
+              $counter = 1
+              foreach ($v in $allVersions) {
+                  $tgzFile = "employee-management-$v.tgz"
+                  $htmlContent += @"
+                                          <tr>
+                                              <td>$counter</td>
+                                              <td><strong>v$v</strong></td>
+                                              <td><code class="text-danger">$tgzFile</code></td>
+                                              <td class="text-end">
+                                                  <a href="./coverage-history/$v/index.html" class="btn btn-sm btn-outline-success" target="_blank">👁️ Buka Laporan Coverage</a>
+                                              </td>
+                                          </tr>
+          "@
+                  $counter++
+              }
+          
+              # Penutup struktur file HTML
+              $htmlContent += @"
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                          <footer class="text-center text-muted mt-5 small">
+                              Automated by Gitea CI Bot &bull; File-History Repository
+                          </footer>
+                      </div>
+                  </div>
+              </div>
+          </body>
+          </html>
+          "@
+          
+              # Simpan hasilnya menjadi file index.html di root repo File-History
+              $htmlContent | Set-Content -Path "index.html" -Encoding utf8
+              git add "index.html"
+          
           } else {
               Write-Host "Warning: Folder JaCoCo tidak ditemukan di $jacocoPath."
           }
@@ -183,15 +268,17 @@ jobs:
           # 7. Commit dan Push semua perubahan ke GitHub File-History
           $gitStatus = git status --porcelain
           if ($gitStatus) {
-              Write-Host "Mengirimkan artifact ke GitHub..."
-              git commit -m "chore(archive): save helm & coverage for version $newVer [skip ci]"
+              Write-Host "Mengirimkan artifact dan memperbarui dashboard ke GitHub..."
+              git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
               git push origin HEAD:main
           
-              # Trik Tambahan: Cetak link langsung ke log Gitea Actions
               Write-Host "========================================================================="
-              Write-Host "🚀 DASHBOARD JACOCO COVARAGE TELAH SIAP!"
-              Write-Host "👉 Link: https://mrezanur-creator.github.io/File-History/coverage-history/$newVer/"
+              Write-Host "🚀 DASHBOARD UTAMA REKAP JACOCO TELAH DIPERBARUI!"
+              Write-Host "👉 Buka Dashboard Utama Anda di sini:"
+              Write-Host "   https://mrezanur-creator.github.io/File-History/"
               Write-Host "========================================================================="
+          } else {
+              Write-Host "Tidak ada perubahan baru."
           }
       # ------------------------------------------------
       # Deploy ke OpenShift via SSH (Hanya Import Image)
