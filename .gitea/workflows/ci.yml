@@ -46,14 +46,18 @@ jobs:
         #run: mvn clean verify "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
         run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
       
-      # ------------------------------------------------
-      # Simpan Laporan JaCoCo Code Coverage ke Gitea
-      # ------------------------------------------------
+       # 1. Kompres folder JaCoCo menjadi satu file ZIP lewat PowerShell
+      - name: Compress JaCoCo Report
+        shell: powershell
+        run: |
+          Compress-Archive -Path target/site/jacoco/* -DestinationPath target/site/jacoco-report.zip -Force
+
+      # 2. Upload hanya SATU file zip saja ke Gitea
       - name: Upload JaCoCo Report
-        uses: actions/upload-artifact@v3 # Ganti dari v4 ke v3
+        uses: actions/upload-artifact@v3
         with:
           name: jacoco-code-coverage-report
-          path: target/site/jacoco/
+          path: target/site/jacoco-report.zip # Arahkan ke file zip-nya
           retention-days: 7
 
       # ------------------------------------------------
