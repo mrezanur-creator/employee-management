@@ -186,9 +186,13 @@ jobs:
               Write-Host "Mengirimkan artifact ke GitHub..."
               git commit -m "chore(archive): save helm & coverage for version $newVer [skip ci]"
               git push origin HEAD:main
-          } else {
-              Write-Host "Tidak ada perubahan baru (artifact versi ini sudah ada)."
-          }  
+          
+              # Trik Tambahan: Cetak link langsung ke log Gitea Actions
+              Write-Host "========================================================================="
+              Write-Host "🚀 DASHBOARD JACOCO COVARAGE TELAH SIAP!"
+              Write-Host "👉 Link: https://mrezanur-creator.github.io/File-History/coverage-history/$newVer/"
+              Write-Host "========================================================================="
+          }
       # ------------------------------------------------
       # Deploy ke OpenShift via SSH (Hanya Import Image)
       # ------------------------------------------------
