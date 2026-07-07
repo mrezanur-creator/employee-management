@@ -27,14 +27,4 @@ resources:
     memory: 512Mi
 
 rollout:
-  enabled: true
-
-  canary:
-    enabled: false
-
-    steps:
-      - setWeight: 20
-      - pause: {}
-      - setWeight: 50
-      - pause: {}
-      - setWeight: 100
+  enabled: false
