@@ -44,7 +44,8 @@ jobs:
       - name: Build & Test with JaCoCo
         #run: mvn clean verify "-Dmaven.repo.local=.m2/repository"
         #run: mvn clean verify "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
-        run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
+        #run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
+        run: mvn clean verify jacoco:report "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
       
        # 1. Kompres folder JaCoCo menjadi satu file ZIP lewat PowerShell
       - name: Compress JaCoCo Report
