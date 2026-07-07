@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "employee-management-chart.fullname" . }}
+  labels:
+    {{- include "employee-management-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+
+  selector:
+    matchLabels:
+      app: {{ include "employee-management-chart.name" . }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ include "employee-management-chart.name" . }}
+
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.spring.profiles | quote }}
+
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: datasource-url
+
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: datasource-username
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: datasource-password
+
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+
+  strategy:
+    canary:
+      stableService: {{ include "employee-management-chart.fullname" . }}
+      canaryService: {{ include "employee-management-chart.fullname" . }}-canary
+
+      steps:
+        - setWeight: 20
+
+        - pause:
+            duration: 30s
+
+        - setWeight: 50
+
+        - pause:
+            duration: 30s
+
+        - setWeight: 100
