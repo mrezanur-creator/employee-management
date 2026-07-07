@@ -56,7 +56,8 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.66"
+          $version="1.0.67
+          "
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -265,12 +266,18 @@ jobs:
               Write-Host "Warning: Folder JaCoCo tidak ditemukan di $jacocoPath."
           }
           
+          
           # 7. Commit dan Push semua perubahan ke GitHub File-History
           $gitStatus = git status --porcelain
           if ($gitStatus) {
               Write-Host "Mengirimkan artifact dan memperbarui dashboard ke GitHub..."
               git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
               git push origin HEAD:main
+          
+              # -----------------------------------------------------------------
+              # FIX ENCODING: Paksa PowerShell Runner menggunakan Output UTF-8
+              # -----------------------------------------------------------------
+              [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           
               Write-Host "========================================================================="
               Write-Host "🚀 DASHBOARD UTAMA REKAP JACOCO TELAH DIPERBARUI!"
