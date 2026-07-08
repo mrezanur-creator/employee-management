@@ -56,7 +56,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.78"
+          $version="1.0.79"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -205,7 +205,7 @@ jobs:
                   <div class="row justify-content-center">
                       <div class="col-md-10">
                           <div class="d-flex align-items-center justify-content-between mb-4">
-                              <h2 class="header-title">📊 JaCoCo Code Coverage History</h2>
+                              <h2 class="header-title">JaCoCo Code Coverage History</h2>
                               <span class="badge bg-primary">Last Updated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")</span>
                           </div>
           
@@ -234,7 +234,7 @@ jobs:
                                               <td><strong>v$v</strong></td>
                                               <td><code class="text-danger">$tgzFile</code></td>
                                               <td class="text-end">
-                                                  <a href="./coverage-history/$v/index.html" class="btn btn-sm btn-outline-success" target="_blank">👁️ Buka Laporan Coverage</a>
+                                                  <a href="./coverage-history/$v/index.html" class="btn btn-sm btn-outline-success" target="_blank">Buka Laporan Coverage</a>
                                               </td>
                                           </tr>
           "@
