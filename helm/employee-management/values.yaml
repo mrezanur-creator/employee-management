@@ -1,5 +1,9 @@
 replicaCount: 1
 
+image:
+  repository: ""
+  pullPolicy: Always
+
 spring:
   profiles: docker
 
