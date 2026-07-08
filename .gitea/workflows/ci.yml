@@ -38,7 +38,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.81"
+          $version="1.0.8"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -218,7 +218,7 @@ jobs:
         run: |
           $version = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $packageName = "employee-management-$version.tgz"
-          $chartmuseumUrl = "http://chartmuseum.local.env:8081/api/charts"
+          $chartmuseumUrl = "http://chartmuseum.local.env:8081/api/employee-management/charts"
           
           Write-Host "🚀 Mengunggah paket $packageName langsung ke API ChartMuseum..."
           if (Test-Path $packageName) {
