@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
   packages: write
-  
+
 env:
   IMAGE_NAME: employee-management
   CHART_PATH: helm/employee-management
@@ -27,26 +27,8 @@ jobs:
           distribution: temurin
           java-version: 25
 
-     # - name: Cache Maven
-       # uses: actions/cache@v4
-       # with:
-          #path: .m2/repository
-          #key: maven-${{ hashFiles('**/pom.xml') }}
-          #restore-keys: |
-           # maven-
-            
-      # Menggunakan jalur absolut agar plugin cache di Windows tidak bingung
-         # path: ${{ github.workspace }}/.m2/repository
-          #key: maven-${{ hashFiles('**/pom.xml') }}
-          #restore-keys: |
-          #  maven-      
-
       - name: Build & Test with JaCoCo
-        #run: mvn clean verify "-Dmaven.repo.local=.m2/repository"
-        #run: mvn clean verify "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
         run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
-        #run: mvn clean verify jacoco:report "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
-      
 
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
@@ -88,10 +70,6 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # 1. Update tag di values.yaml (Uncomment jika dibutuhkan)
-          # $valuesPath = "${{ env.CHART_PATH }}/values.yaml"
-          # (Get-Content $valuesPath) -replace 'tag:.*', ("tag: `"$newVer`"") | Set-Content $valuesPath
-          
           # 2. Update version dan appVersion di Chart.yaml
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
@@ -105,7 +83,7 @@ jobs:
           Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
 
       # ------------------------------------------------
-      # Helm Steps
+      # Helm Steps (Linting & Packaging)
       # ------------------------------------------------
       - name: Helm Lint
         run: helm lint ${{ env.CHART_PATH }} --debug
@@ -200,9 +178,6 @@ jobs:
           cd ..
 
       # -----------------------------------------------------------------
-      # 2. Ekstrak Angka & Suntik ke File Deployment Proyek
-      # -----------------------------------------------------------------
-      # -----------------------------------------------------------------
       # 2. Ekstrak Angka & Suntik ke File Deployment Proyek (Folder Helm)
       # -----------------------------------------------------------------
       - name: Inject Coverage to Deployment Manifest
@@ -226,7 +201,7 @@ jobs:
               }
           }
           
-          # JALUR DIUBAH KE FOLDER TEMPLATES HELM LU
+          # Jalur template deployment di folder Helm
           $yamlPath = "${{ env.CHART_PATH }}/templates/deployment.yaml"
           if (Test-Path $yamlPath) {
               (Get-Content $yamlPath) -replace 'JACOCO_COVERAGE_PLACEHOLDER', $coveragePercent | Set-Content $yamlPath
@@ -234,8 +209,28 @@ jobs:
           } else {
               Write-Host "Warning: File $yamlPath tidak ditemukan. Pastikan path manifest Helm sudah benar."
           }
+
       # -----------------------------------------------------------------
-      # 3. Deploy ke OpenShift via SSH (Hanya Import Image)
+      # 3. Push File Paket Helm .tgz ke ChartMuseum via API
+      # -----------------------------------------------------------------
+      - name: Push Helm Chart to ChartMuseum via API
+        shell: powershell
+        run: |
+          $version = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $packageName = "employee-management-$version.tgz"
+          $chartmuseumUrl = "http://chartmuseum.local.env:8081/api/charts"
+          
+          Write-Host "🚀 Mengunggah paket $packageName langsung ke API ChartMuseum..."
+          if (Test-Path $packageName) {
+              Invoke-RestMethod -Uri $chartmuseumUrl -Method Post -InFile $packageName -ContentType "application/x-compressed"
+              Write-Host "✅ Sukses mengunggah Chart ke ChartMuseum!"
+          } else {
+              Write-Error "❌ Gagal: File paket $packageName tidak ditemukan untuk di-upload."
+              exit 1
+          }
+
+      # -----------------------------------------------------------------
+      # 4. Deploy ke OpenShift via SSH (Hanya Import Image)
       # -----------------------------------------------------------------
       - name: Deploy to OpenShift
         if: github.event_name == 'push'
@@ -257,7 +252,7 @@ jobs:
           "
 
       # -----------------------------------------------------------------
-      # 4. Otomatisasi Update Manifest GitOps
+      # 5. Otomatisasi Update Manifest GitOps
       # -----------------------------------------------------------------
       - name: Update GitOps Repository
         shell: powershell
