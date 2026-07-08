@@ -1,5 +1,9 @@
 replicaCount: 1
 
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/employee-management/employee-management
+  pullPolicy: Always
+
 spring:
   profiles: docker
 

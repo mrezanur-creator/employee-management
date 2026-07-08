@@ -1,0 +1,19 @@
+{{- if .Values.rollout.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "employee-management-chart.fullname" . }}-canary
+  labels:
+    {{- include "employee-management-chart.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+
+  selector:
+    app: {{ include "employee-management-chart.name" . }}
+
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      name: http
+{{- end }}
