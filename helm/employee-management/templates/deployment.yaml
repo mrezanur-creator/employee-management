@@ -29,6 +29,9 @@ spec:
               containerPort: {{ .Values.service.targetPort }}
 
           env:
+            - name: JACOCO_COVERAGE_VALUE
+              value: "JACOCO_COVERAGE_PLACEHOLDER"
+
             - name: SPRING_PROFILES_ACTIVE
               value: {{ .Values.spring.profiles | quote }}
 

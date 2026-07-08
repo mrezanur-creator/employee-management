@@ -56,7 +56,7 @@ jobs:
         shell: powershell
         run: |
           # $version="1.0.${{ github.run_number }}"
-          $version="1.0.79"
+          $version="1.0.80"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -117,55 +117,40 @@ jobs:
       - name: Helm Repo Update
         run: helm repo update
 
-      - name: Push Helm Chart
-        shell: powershell
-        run: |
-          helm cm-push employee-management-${{ steps.versioning.outputs.IMAGE_VERSION }}.tgz employee-management
-        
-      # ------------------------------------------------
-      # Push File .tgz & Laporan JaCoCo ke Repo File-History
-      # ------------------------------------------------
+      # -----------------------------------------------------------------
+      # 1. Simpan Artifact ke File-History Repo & Hitung Angka Coverage
+      # -----------------------------------------------------------------
       - name: Push Helm Chart & JaCoCo to File History Repo
         shell: powershell
         env:
-          GH_TOKEN: ${{ secrets.GHCR_TOKEN }} # Pastikan token ini punya akses write ke repo File-History
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          # 1. Ambil versi secara dinamis dari step sebelumnya
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $packageName = "employee-management-$newVer.tgz"
           
-          # 2. Cari file .tgz hasil compile di workspace saat ini
           Write-Host "Mencari file paket Helm: $packageName ..."
           $targetFile = Get-ChildItem -Path . -Filter $packageName -Recurse | Select-Object -First 1
           if (-not $targetFile) {
-              Write-Error "Gagal: File $packageName tidak ditemukan! Periksa step Helm Package Anda."
+              Write-Error "Gagal: File $packageName tidak ditemukan!"
               exit 1
           }
           
-          # 3. Setup Identitas Git global
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot Audit"
           
-          # 4. Clone repositori File-History dengan aman tanpa mengotori Windows Credential Manager
           Write-Host "Cloning repo mrezanur-creator/File-History..."
-          
-          # Kita gunakan flag -c http.extraHeader untuk menyuntikkan token secara langsung dan rapi
           $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("mrezanur-creator:${env:GH_TOKEN}"))
           git -c http.extraHeader="Authorization: Basic $base64Auth" clone "https://github.com/mrezanur-creator/File-History.git" history-repo
           
           cd history-repo
-          
-          # Daftarkan konfigurasi ekstraHeader agar proses push di bawah nanti otomatis terautentikasi
           git config http.extraHeader "Authorization: Basic $base64Auth"
           
-          # 5. Salin file .tgz ke folder 'helm-releases' di dalam repo history
           if (-not (Test-Path "helm-releases")) { 
               New-Item -ItemType Directory -Path "helm-releases" | Out-Null 
           }
           Copy-Item $targetFile.FullName -Destination "helm-releases/"
           git add "helm-releases/$packageName"
           
-          # 6. Salin laporan JaCoCo HTML ke folder 'coverage-history/versi-angka'
           $jacocoPath = "../target/site/jacoco"
           if (Test-Path $jacocoPath) {
               $coverageDest = "coverage-history/$newVer"
@@ -174,131 +159,57 @@ jobs:
               }
               Copy-Item -Path "$jacocoPath\*" -Destination $coverageDest -Recurse -Force
               git add "coverage-history/$newVer/*"
-              Write-Host "Laporan JaCoCo berhasil disalin ke folder coverage-history/$newVer"
+              Write-Host "Laporan JaCoCo berhasil disalin."
           
-              # ----------------------------------------------------------------
-              # OTOMATISASI GENERATE DASHBOARD UTAMA (REKAP VERSI)
-              # ----------------------------------------------------------------
-              Write-Host "Memperbarui index Dashboard Utama..."
-          
-              # Ambil semua folder versi yang ada di dalam coverage-history
+              # --- GENERATE DASHBOARD LANDING PAGE ---
               $allVersions = Get-ChildItem -Path "coverage-history" -Directory | Select-Object -ExpandProperty Name | Sort-Object {[version]$_} -Descending
-          
-              # Mulai susun struktur HTML untuk file index.html utama
               $htmlContent = @"
           <!DOCTYPE html>
           <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>JaCoCo Code Coverage History Dashboard</title>
+              <title>JaCoCo Dashboard</title>
               <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-              <style>
-                  body { background-color: #f8f9fa; padding-top: 30px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-                  .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
-                  .table-hover tbody tr:hover { background-color: #f1f3f5; }
-                  .header-title { color: #212529; font-weight: 700; margin-bottom: 20px; }
-              </style>
           </head>
-          <body>
-              <div class="container">
-                  <div class="row justify-content-center">
-                      <div class="col-md-10">
-                          <div class="d-flex align-items-center justify-content-between mb-4">
-                              <h2 class="header-title">JaCoCo Code Coverage History</h2>
-                              <span class="badge bg-primary">Last Updated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")</span>
-                          </div>
-          
-                          <div class="card p-4 mb-4">
-                              <h5 class="card-title text-secondary mb-3">Daftar Riwayat Build Proyek</h5>
-                              <div class="table-responsive">
-                                  <table class="table table-striped table-hover align-middle">
-                                      <thead class="table-dark">
-                                          <tr>
-                                              <th>#</th>
-                                              <th>Versi Aplikasi</th>
-                                              <th>Paket Helm (.tgz)</th>
-                                              <th class="text-end">Aksi Laporan</th>
-                                          </tr>
-                                      </thead>
-                                      <tbody>
+          <body class="bg-light p-5">
+              <div class="container card p-4 shadow">
+                  <h2 class="mb-4">📊 JaCoCo Code Coverage History</h2>
+                  <table class="table table-striped">
+                      <thead class="table-dark"><tr><th>#</th><th>Versi</th><th>Paket Helm</th><th>Aksi</th></tr></thead>
+                      <tbody>
           "@
-          
-              # Loop untuk memasukkan daftar versi ke dalam baris tabel HTML
               $counter = 1
               foreach ($v in $allVersions) {
                   $tgzFile = "employee-management-$v.tgz"
-                  $htmlContent += @"
-                                          <tr>
-                                              <td>$counter</td>
-                                              <td><strong>v$v</strong></td>
-                                              <td><code class="text-danger">$tgzFile</code></td>
-                                              <td class="text-end">
-                                                  <a href="./coverage-history/$v/index.html" class="btn btn-sm btn-outline-success" target="_blank">Buka Laporan Coverage</a>
-                                              </td>
-                                          </tr>
-          "@
+                  $htmlContent += "<tr><td>$counter</td><td><strong>v$v</strong></td><td><code>$tgzFile</code></td><td><a href='./coverage-history/$v/index.html' class='btn btn-sm btn-success' target='_blank'>Buka Laporan</a></td></tr>"
                   $counter++
               }
-          
-              # Penutup struktur file HTML
-              $htmlContent += @"
-                                      </tbody>
-                                  </table>
-                              </div>
-                          </div>
-                          <footer class="text-center text-muted mt-5 small">
-                              Automated by Gitea CI Bot &bull; File-History Repository
-                          </footer>
-                      </div>
-                  </div>
-              </div>
-          </body>
-          </html>
-          "@
-          
-              # Simpan hasilnya menjadi file index.html di root repo File-History
+              $htmlContent += "</tbody></table></div></body></html>"
               $htmlContent | Set-Content -Path "index.html" -Encoding utf8
               git add "index.html"
-          
-          } else {
-              Write-Host "Warning: Folder JaCoCo tidak ditemukan di $jacocoPath."
           }
           
-          
-          # 7. Commit dan Push semua perubahan ke GitHub File-History
           $gitStatus = git status --porcelain
           if ($gitStatus) {
-              Write-Host "Mengirimkan artifact dan memperbarui dashboard ke GitHub..."
               git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
               git push origin HEAD:main
-          
-              # -----------------------------------------------------------------
-              # FIX ENCODING: Paksa PowerShell Runner menggunakan Output UTF-8
-              # -----------------------------------------------------------------
-              [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          
-              Write-Host "========================================================================="
-              Write-Host "🚀 DASHBOARD UTAMA REKAP JACOCO TELAH DIPERBARUI!"
-              Write-Host "👉 Buka Dashboard Utama Anda di sini:"
-              Write-Host "   https://mrezanur-creator.github.io/File-History/"
-              Write-Host "========================================================================="
-          } else {
-              Write-Host "Tidak ada perubahan baru."
           }
-          # ------------------------------------------------
-          # Ekstrak & Kirim Metrik Coverage ke Prometheus Pushgateway
-          # ------------------------------------------------
-          # ------------------------------------------------
-          # Ekstrak & Kirim Metrik Coverage ke Prometheus Pushgateway
-          # ------------------------------------------------
-      # ------------------------------------------------
-      # Ekstrak & Kirim Metrik Coverage ke Prometheus Pushgateway
-      # ------------------------------------------------
-      - name: Push Coverage Metrics to Prometheus
+          
+          # Kembali ke root workspace aplikasi sebelum melangkah ke step berikutnya
+          cd ..
+
+      # -----------------------------------------------------------------
+      # 2. Ekstrak Angka & Suntik ke File Deployment Proyek
+      # -----------------------------------------------------------------
+      # -----------------------------------------------------------------
+      # 2. Ekstrak Angka & Suntik ke File Deployment Proyek (Folder Helm)
+      # -----------------------------------------------------------------
+      - name: Inject Coverage to Deployment Manifest
         shell: powershell
         run: |
           $xmlPath = "target/site/jacoco/jacoco.xml"
+          $coveragePercent = 0.0
           
           if (Test-Path $xmlPath) {
               [xml]$jacocoXml = Get-Content $xmlPath
@@ -310,36 +221,22 @@ jobs:
                   $total = $covered + $missed
                   $coveragePercent = [math]::Round(($covered / $total) * 100, 2)
           
-                  Write-Host "=== HASIL ANALISIS JACOCO XML ==="
-                  Write-Host "Baris Ter-cover : $covered"
-                  Write-Host "Baris Terlewat  : $missed"
+                  Write-Host "=== HASIL EKSTRAKSI COVERAGE ==="
                   Write-Host "Total Persentase: $coveragePercent %"
-          
-                  # Payload menggunakan single quote, aman dari bentrok parser
-                  $payload = 'jacoco_line_coverage_percent{application="employee-management"} ' + $coveragePercent + "`n"
-          
-                  # Cek jaringan ke host Windows
-                  $pushgatewayUrl = "http://localhost:9091/metrics/job/gitea_artifacts/instance/localhost"
-                  if (Test-Connection -ComputerName "host.docker.internal" -Count 1 -Quiet) {
-                      $pushgatewayUrl = "http://host.docker.internal:9091/metrics/job/gitea_artifacts/instance/localhost"
-                  }
-          
-                  Write-Host "Mengirim data metrik ke Pushgateway ($pushgatewayUrl)..."
-                  try {
-                      Invoke-RestMethod -Uri $pushgatewayUrl -Method Post -Body $payload -ContentType "text/plain; charset=utf-8"
-                      Write-Host "SUKSES: Berhasil mengirim metrik ke Grafana/Prometheus!"
-                  } catch {
-                      Write-Error "GAGAL: Gagal mengirim RestMethod ke Pushgateway: $_"
-                  }
-              } else {
-                  Write-Host "Warning: Counter tipe LINE tidak ditemukan di dalam XML."
               }
-          } else {
-              Write-Host "ERROR: File jacoco.xml tidak ditemukan!"
           }
-      # ------------------------------------------------
-      # Deploy ke OpenShift via SSH (Hanya Import Image)
-      # ------------------------------------------------
+          
+          # JALUR DIUBAH KE FOLDER TEMPLATES HELM LU
+          $yamlPath = "${{ env.CHART_PATH }}/templates/deployment.yaml"
+          if (Test-Path $yamlPath) {
+              (Get-Content $yamlPath) -replace 'JACOCO_COVERAGE_PLACEHOLDER', $coveragePercent | Set-Content $yamlPath
+              Write-Host "Berhasil menyuntikkan angka $coveragePercent ke $yamlPath"
+          } else {
+              Write-Host "Warning: File $yamlPath tidak ditemukan. Pastikan path manifest Helm sudah benar."
+          }
+      # -----------------------------------------------------------------
+      # 3. Deploy ke OpenShift via SSH (Hanya Import Image)
+      # -----------------------------------------------------------------
       - name: Deploy to OpenShift
         if: github.event_name == 'push'
         shell: powershell
@@ -349,20 +246,19 @@ jobs:
           ssh root@100.103.175.35 "
             set -e
             echo 'Mengimport image untuk versi: $VERSION'
-            
+          
             oc import-image employee-management:$VERSION \
               --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
               --confirm \
               -n employee-management
 
-            # Helm upgrade dimatikan karena sudah ditangani penuh oleh GitOps ArgoCD
             helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
             helm repo update
           "
-          
-      # ------------------------------------------------
-      # Otomatisasi Update Manifest GitOps
-      # ------------------------------------------------
+
+      # -----------------------------------------------------------------
+      # 4. Otomatisasi Update Manifest GitOps
+      # -----------------------------------------------------------------
       - name: Update GitOps Repository
         shell: powershell
         env:
@@ -370,29 +266,21 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # 1. Konfigurasi Git Identity
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot"
           
-          # 2. Clone Repositori GitOps
           git clone http://ci-bot:${env:GITEA_TOKEN}@gitea.local.env:8081/gitops/gitops-config.git gitops-repo
-          
-          # 3. Masuk ke folder repo GitOps
           cd gitops-repo
           
-          # 4. Perubahan Versi Dinamis Line-by-Line (Hanya targetRevision milik Helm Chart)
           $targetFile = "dev/apps/employee-management-apps.yaml"
           $lines = Get-Content $targetFile
           $foundRepo = $false
 
           for ($i = 0; $i -lt $lines.Count; $i++) {
-              # Cari baris repoURL yang mengandung employee-management/
               if ($lines[$i] -match "repoURL:.*employee-management/") {
                   $foundRepo = $true
                   continue
               }
-              
-              # Ganti baris targetRevision terdekat tepat di bawahnya
               if ($foundRepo -and $lines[$i] -match "targetRevision:") {
                   $lines[$i] = "      targetRevision: $newVer"
                   $foundRepo = $false
@@ -401,7 +289,6 @@ jobs:
 
           $lines | Set-Content $targetFile
           
-          # 5. Commit dan Push Perubahan Kembali ke Gitea
           git add $targetFile
           git commit -m "chore(gitops): auto-update employee-management to version $newVer [skip ci]"
           git push origin master
