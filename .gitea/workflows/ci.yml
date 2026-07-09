@@ -5,7 +5,13 @@ on:
     branches: [ "main", "master", "feature-employee-update" ]
   # Ditambahkan pemicu agar robot QA bisa nembak balik ke sini membawa hasil tes
   workflow_dispatch:
-
+    inputs:
+      qa_status:
+        description: 'Status dari QA'
+        required: false
+      target_version:
+        description: 'Versi yang dilanjutkan'
+        required: false
 
 permissions:
   contents: read
@@ -20,7 +26,6 @@ jobs:
   # JOB 1: BUILD, TEST INTERNAL, & TEMBAK PIPELINE QA (Triggered by PUSH)
   # =================================================================
   build:
-    if: github.event_name == 'push'
     runs-on: self-hosted
     timeout-minutes: 10
 
@@ -243,14 +248,14 @@ jobs:
         shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
-          run: |
-            $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-            $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
-            Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management/actions/workflows/qa-automation.yml/dispatches" `
-              -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+        run: |
+          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management/actions/workflows/qa-automation.yml/dispatches" `
+            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
 
   # =================================================================
-  # JOB 2: DEPLOY OPENSHIFT & REPO GITOPS (Triggered by QA Pipeline SUCCESS)
+  # JOB 2: DEPLOY OPENSHIFT & REPO GITOPS (Triggered ONLY by QA dispatch SUCCESS)
   # =================================================================
   deploy-after-qa:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.qa_status == 'success'
@@ -265,7 +270,6 @@ jobs:
       - name: Deploy to OpenShift
         shell: powershell
         run: |
-          # Mengambil data versi dari input parameter dispatch yang dikirim oleh QA
           $VERSION = "${{ github.event.inputs.target_version }}".Trim()
           Write-Host "QA Status SUCCESS! Memulai deployment OpenShift untuk versi: $VERSION"
           
@@ -278,7 +282,6 @@ jobs:
               --confirm \
               -n employee-management
           
-            # Diminta mas pab sama maceng buat kasi tag untuk prod
             oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
 
             helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
