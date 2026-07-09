@@ -58,6 +58,10 @@ spec:
     canary:
       stableService: {{ include "employee-management-chart.fullname" . }}
       canaryService: {{ include "employee-management-chart.fullname" . }}-canary
+
+      maxSurge: { { .Values.rollout.canary.maxSurge } }
+      maxUnavailable: { { .Values.rollout.canary.maxUnavailable } }
+
       steps:
 {{ toYaml .Values.rollout.canary.steps | nindent 8 }}
 {{- end }}
