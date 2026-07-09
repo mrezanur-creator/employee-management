@@ -2,7 +2,7 @@ name: Employee Management CD (Deploy After QA)
 
 on:
   workflow_dispatch: # Polosan tanpa inputs bwang, biar Gitea gak error!
-
+  repository_dispatch:
 env:
   CHART_PATH: helm/employee-management
 
