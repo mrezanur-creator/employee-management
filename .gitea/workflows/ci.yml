@@ -30,6 +30,48 @@ jobs:
       - name: Build & Test with JaCoCo
         run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
 
+      # -----------------------------------------------------------------
+      # OPTION 2: Real Internal API Testing (Ditaruh tepat setelah Build)
+      # -----------------------------------------------------------------
+      - name: Real Internal API Testing
+        shell: powershell
+        run: |
+          Write-Host "🚀 Menyalakan aplikasi Spring Boot secara riil di background..."
+          
+          # 1. Cari file .jar hasil build Maven secara dinamis
+          $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
+          if (-not $jarFile) {
+              Write-Error "❌ File .jar tidak ditemukan di folder target!"
+              exit 1
+          }
+          
+          # 2. Jalankan JAR di port 8082 secara terpisah (background)
+          $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
+          Write-Host "⏳ Menunggu server Tomcat internal naik (15 detik)..."
+          Start-Sleep -Seconds 15
+          
+          # 3. Eksekusi Test HTTP Request
+          try {
+              Write-Host "🔍 Nembak Endpoint Actuator Health Check..."
+              $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
+              Write-Host "   Status Aplikasi: $($health.status)"
+          
+              Write-Host "🔍 Nembak Endpoint Bisnis: GET /api/employees"
+              $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
+              Write-Host "✅ Sukses! Aplikasi merespons dengan baik."
+          
+          } catch {
+              Write-Error "❌ API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
+          
+              # FORCE SHUTDOWN: Matikan paksa aplikasinya agar port tidak menggantung
+              Stop-Process -Id $appProcess.Id -Force
+              exit 1
+          }
+          
+          # 4. Bersihkan proses setelah sukses
+          Write-Host "🛑 Mematikan server aplikasi internal test..."
+          Stop-Process -Id $appProcess.Id -Force        
+
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
       # ------------------------------------------------
@@ -37,8 +79,8 @@ jobs:
         id: versioning
         shell: powershell
         run: |
-          # $version="1.0.${{ github.run_number }}"
-          $version="1.0.84"
+          $version="1.0.${{ github.run_number }}"
+          # $version="1.0.84"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
