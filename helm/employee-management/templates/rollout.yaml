@@ -1,4 +1,3 @@
-{{- if .Values.rollout.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
@@ -59,9 +58,8 @@ spec:
       stableService: {{ include "employee-management-chart.fullname" . }}
       canaryService: {{ include "employee-management-chart.fullname" . }}-canary
 
-      maxSurge: { { .Values.rollout.canary.maxSurge } }
-      maxUnavailable: { { .Values.rollout.canary.maxUnavailable } }
+      maxSurge: {{ .Values.rollout.canary.maxSurge }}
+      maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
 
       steps:
 {{ toYaml .Values.rollout.canary.steps | nindent 8 }}
-{{- end }}
