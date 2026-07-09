@@ -256,6 +256,9 @@ jobs:
               --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
               --confirm \
               -n employee-management
+          
+            #DIminta mas pab sama maceng buat kasi tag untuk prod
+            oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
 
             helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
             helm repo update
