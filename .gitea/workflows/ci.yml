@@ -3,6 +3,15 @@ name: Employee Management CI
 on:
   push:
     branches: [ "main", "master", "feature-employee-update" ]
+  # Ditambahkan pemicu agar robot QA bisa nembak balik ke sini membawa hasil tes
+  workflow_dispatch:
+    inputs:
+      qa_status:
+        description: 'Status dari QA'
+        required: false
+      target_version:
+        description: 'Versi yang dilanjutkan'
+        required: false
 
 permissions:
   contents: read
@@ -13,7 +22,11 @@ env:
   CHART_PATH: helm/employee-management
 
 jobs:
+  # =================================================================
+  # JOB 1: BUILD, TEST INTERNAL, & TEMBAK PIPELINE QA (Triggered by PUSH)
+  # =================================================================
   build:
+    if: github.event_name == 'push'
     runs-on: self-hosted
     timeout-minutes: 10
 
@@ -36,23 +49,19 @@ jobs:
       - name: Real Internal API Testing
         shell: powershell
         run: |
-          # Tambahkan ini di baris pertama step "Real Internal API Testing" jika port sering macet
           Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
           Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
           
-          # 1. Cari file .jar hasil build Maven secara dinamis
           $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
           if (-not $jarFile) {
               Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
               exit 1
           }
           
-          # 2. Jalankan JAR di port 8082 secara terpisah (background)
           $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
           Write-Host "[INFO] Menunggu server Tomcat internal naik (15 detik)..."
           Start-Sleep -Seconds 15
           
-          # 3. Eksekusi Test HTTP Request
           try {
               Write-Host "[TEST] Nembak Endpoint Actuator Health Check..."
               $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
@@ -78,12 +87,10 @@ jobs:
                   Write-Host "[WARN] Error Response dari Server: $errorResponse"
               }
           
-              # Pastikan proses dimatikan jika error
               Stop-Process -Id $appProcess.Id -Force
               exit 1
           }
           
-          # 4. Bersihkan proses setelah sukses
           Write-Host "[INFO] Mematikan server aplikasi internal test..."
           Stop-Process -Id $appProcess.Id -Force  
 
@@ -95,7 +102,6 @@ jobs:
         shell: powershell
         run: |
           $version="1.0.${{ github.run_number }}"
-          # $version="1.0.84"
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
@@ -127,7 +133,6 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           
-          # Update version dan appVersion di Chart.yaml
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
             -replace '(?<=\b)version:.*', ("version: $newVer") `
@@ -235,18 +240,41 @@ jobs:
               git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
               git push origin HEAD:main
           }
-          
-          # KOREKSI: Kembali ke root folder proyek utama aplikasi agar step di bawah tidak salah path
           cd ..
+
+      # -----------------------------------------------------------------
+      # 🚀 STEP TERAKHIR JOB 1: TEMBAK AUTOMATION QA PIPELINE
+      # -----------------------------------------------------------------
+      - name: Trigger QA Pipeline
+        shell: powershell
+        env:
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          # ref diganti ke 'main' agar sesuai dengan branch utama repositori Gitea lu
+          $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yml/dispatches" `
+            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+
+  # =================================================================
+  # JOB 2: DEPLOY OPENSHIFT & REPO GITOPS (Triggered by QA Pipeline SUCCESS)
+  # =================================================================
+  deploy-after-qa:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.qa_status == 'success'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
       # ------------------------------------------------
       # Deploy ke OpenShift via SSH (Hanya Import Image)
       # ------------------------------------------------
       - name: Deploy to OpenShift
-        if: github.event_name == 'push'
         shell: powershell
         run: |
-          $VERSION = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()
+          # Mengambil data versi dari input parameter dispatch yang dikirim oleh QA
+          $VERSION = "${{ github.event.inputs.target_version }}".Trim()
+          Write-Host "QA Status SUCCESS! Memulai deployment OpenShift untuk versi: $VERSION"
           
           ssh root@100.103.175.35 "
             set -e
@@ -257,7 +285,7 @@ jobs:
               --confirm \
               -n employee-management
           
-            #DIminta mas pab sama maceng buat kasi tag untuk prod
+            # Diminta mas pab sama maceng buat kasi tag untuk prod
             oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
 
             helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
@@ -272,7 +300,7 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
         run: |
-          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $newVer = "${{ github.event.inputs.target_version }}".Trim()
           
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot"
