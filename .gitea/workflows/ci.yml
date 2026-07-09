@@ -148,5 +148,5 @@ jobs:
           $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           # Kita kirim target_version lewat body mentah, Gitea tetep nerima ref
           $body = @{ ref = "main" } | ConvertTo-Json
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management/actions/workflows/qa-automation.yml/dispatches" `
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management2/actions/workflows/qa-automation.yml/dispatches" `
             -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
