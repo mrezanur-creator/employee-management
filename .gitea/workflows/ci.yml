@@ -3,14 +3,6 @@ name: Employee Management CI
 on:
   push:
     branches: [ "main", "master", "feature-employee-update" ]
-  workflow_dispatch:
-    inputs:
-      qa_status:
-        description: 'Status dari QA'
-        required: false
-      target_version:
-        description: 'Versi yang dilanjutkan'
-        required: false
 
 permissions:
   contents: read
@@ -21,12 +13,10 @@ env:
   CHART_PATH: helm/employee-management
 
 jobs:
-  # STAGE 1: Jalan otomatis pas lu PUSH kodingan
-  build-and-trigger-qa:
-    if: github.event_name == 'push'
+  build:
     runs-on: self-hosted
-    outputs:
-      IMAGE_VERSION: ${{ steps.versioning.outputs.IMAGE_VERSION }}
+    timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,14 +87,21 @@ jobs:
           Write-Host "[INFO] Mematikan server aplikasi internal test..."
           Stop-Process -Id $appProcess.Id -Force  
 
-
+      # ------------------------------------------------
+      # Generate Version (Menggunakan Run Number Gitea)
+      # ------------------------------------------------
       - name: Generate Image Version
         id: versioning
         shell: powershell
         run: |
           $version="1.0.${{ github.run_number }}"
-          "$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          # $version="1.0.84"
+          Write-Output "::set-output name=IMAGE_VERSION::$version"
+          Write-Host "Version Otomatis Baru = $version"
 
+      # ------------------------------------------------
+      # Docker Build & Push
+      # ------------------------------------------------
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
@@ -112,101 +109,192 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build & Push Docker
+      - name: Build Docker
         shell: powershell
         run: |
-          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:$ver .
-          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:$ver
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }} .
 
-      - name: Trigger QA Pipeline
+      - name: Push Docker
         shell: powershell
-        env:
-          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          $body = @{ ref = "master"; inputs = @{ target_version = $ver } } | ConvertTo-Json
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yml/dispatches" `
-            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }}
 
-  # STAGE 2: Hanya jalan kalau di-trigger balik oleh QA Automation
-  deploy-after-qa:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.qa_status == 'success'
-    runs-on: self-hosted
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      # ------------------------------------------------
+      # Update values.yaml & Chart.yaml secara fisik
+      # ------------------------------------------------
       - name: Update Helm Files (values & Chart)
         shell: powershell
         run: |
-          $newVer = "${{ github.event.inputs.target_version }}"
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          
+          # Update version dan appVersion di Chart.yaml
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
             -replace '(?<=\b)version:.*', ("version: $newVer") `
             -replace 'appVersion:.*', ("appVersion: `"$newVer`"") | Set-Content $chartPath
 
-      - name: Helm Package & Push
+      - name: Verify Helm Files
+        shell: powershell
+        run: |
+          Write-Host "===== Hasil Update Chart.yaml ====="
+          Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
+
+      # ------------------------------------------------
+      # Helm Steps
+      # ------------------------------------------------
+      - name: Helm Lint
+        run: helm lint ${{ env.CHART_PATH }} --debug
+
+      - name: Helm Package
         run: |
           helm package ${{ env.CHART_PATH }}
-          helm repo update
-          helm cm-push employee-management-${{ github.event.inputs.target_version }}.tgz employee-management
 
+      - name: Helm Repo Update
+        run: helm repo update
+
+      - name: Push Helm Chart
+        shell: powershell
+        run: |
+          helm cm-push employee-management-${{ steps.versioning.outputs.IMAGE_VERSION }}.tgz employee-management
+
+      # ------------------------------------------------
+      # Push File .tgz & Laporan JaCoCo ke Repo File-History
+      # ------------------------------------------------
       - name: Push Helm Chart & JaCoCo to File History Repo
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          $newVer = "${{ github.event.inputs.target_version }}"
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $packageName = "employee-management-$newVer.tgz"
+          
+          Write-Host "Mencari file paket Helm: $packageName ..."
+          $targetFile = Get-ChildItem -Path . -Filter $packageName -Recurse | Select-Object -First 1
+          if (-not $targetFile) {
+              Write-Error "Gagal: File $packageName tidak ditemukan!"
+              exit 1
+          }
+          
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot Audit"
+          
+          Write-Host "Cloning repo mrezanur-creator/File-History..."
           $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("mrezanur-creator:${env:GH_TOKEN}"))
           git -c http.extraHeader="Authorization: Basic $base64Auth" clone "https://github.com/mrezanur-creator/File-History.git" history-repo
+          
           cd history-repo
           git config http.extraHeader "Authorization: Basic $base64Auth"
-          if (-not (Test-Path "helm-releases")) { New-Item -ItemType Directory -Path "helm-releases" | Out-Null }
-          Copy-Item "../$packageName" -Destination "helm-releases/"
+          
+          if (-not (Test-Path "helm-releases")) { 
+              New-Item -ItemType Directory -Path "helm-releases" | Out-Null 
+          }
+          Copy-Item $targetFile.FullName -Destination "helm-releases/"
           git add "helm-releases/$packageName"
+          
+          $jacocoPath = "../target/site/jacoco"
+          if (Test-Path $jacocoPath) {
+              $coverageDest = "coverage-history/$newVer"
+              if (-not (Test-Path $coverageDest)) { 
+                  New-Item -ItemType Directory -Path $coverageDest | Out-Null 
+              }
+              Copy-Item -Path "$jacocoPath\*" -Destination $coverageDest -Recurse -Force
+              git add "coverage-history/$newVer/*"
+              Write-Host "Laporan JaCoCo berhasil disalin."
+          
+              # --- GENERATE DASHBOARD LANDING PAGE ---
+              $allVersions = Get-ChildItem -Path "coverage-history" -Directory | Select-Object -ExpandProperty Name | Sort-Object {[version]$_} -Descending
+              $htmlContent = @"
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>JaCoCo Dashboard</title>
+              <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+          </head>
+          <body class="bg-light p-5">
+              <div class="container card p-4 shadow">
+                  <h2 class="mb-4">📊 JaCoCo Code Coverage History</h2>
+                  <table class="table table-striped">
+                      <thead class="table-dark"><tr><th>#</th><th>Versi</th><th>Paket Helm</th><th>Aksi</th></tr></thead>
+                      <tbody>
+          "@
+              $counter = 1
+              foreach ($v in $allVersions) {
+                  $tgzFile = "employee-management-$v.tgz"
+                  $htmlContent += "<tr><td>$counter</td><td><strong>v$v</strong></td><td><code>$tgzFile</code></td><td><a href='./coverage-history/$v/index.html' class='btn btn-sm btn-success' target='_blank'>Buka Laporan</a></td></tr>"
+                  $counter++
+              }
+              $htmlContent += "</tbody></table></div></body></html>"
+              $htmlContent | Set-Content -Path "index.html" -Encoding utf8
+              git add "index.html"
+          }
+          
           $gitStatus = git status --porcelain
           if ($gitStatus) {
-              git commit -m "chore(dashboard): auto-update report version $newVer [skip ci]"
+              git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
               git push origin HEAD:main
           }
+          
+          # KOREKSI: Kembali ke root folder proyek utama aplikasi agar step di bawah tidak salah path
           cd ..
 
+      # ------------------------------------------------
+      # Deploy ke OpenShift via SSH (Hanya Import Image)
+      # ------------------------------------------------
       - name: Deploy to OpenShift
+        if: github.event_name == 'push'
         shell: powershell
         run: |
-          $VERSION = "${{ github.event.inputs.target_version }}".Trim()
+          $VERSION = "${{ steps.versioning.outputs.IMAGE_VERSION }}".Trim()
+          
           ssh root@100.103.175.35 "
             set -e
-            oc import-image employee-management:$VERSION --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION --confirm -n employee-management
+            echo 'Mengimport image untuk versi: $VERSION'
+          
+            oc import-image employee-management:$VERSION \
+              --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
+              --confirm \
+              -n employee-management
             #DIminta mas pab sama maceng buat kasi tag untuk prod
             oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
+            helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
+            helm repo update
           "
 
+      # ------------------------------------------------
+      # Otomatisasi Update Manifest GitOps
+      # ------------------------------------------------
       - name: Update GitOps Repository
         shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
         run: |
-          $newVer = "${{ github.event.inputs.target_version }}"
+          $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot"
+          
           git clone http://ci-bot:${env:GITEA_TOKEN}@gitea.local.env:8081/gitops/gitops-config.git gitops-repo
           cd gitops-repo
+          
           $targetFile = "dev/apps/employee-management-apps.yaml"
           $lines = Get-Content $targetFile
           $foundRepo = $false
+
           for ($i = 0; $i -lt $lines.Count; $i++) {
-              if ($lines[$i] -match "repoURL:.*employee-management/") { $foundRepo = $true; continue }
+              if ($lines[$i] -match "repoURL:.*employee-management/") {
+                  $foundRepo = $true
+                  continue
+              }
               if ($foundRepo -and $lines[$i] -match "targetRevision:") {
                   $lines[$i] = "      targetRevision: $newVer"
                   $foundRepo = $false
               }
           }
+
           $lines | Set-Content $targetFile
+          
           git add $targetFile
-          git commit -m "chore(gitops): auto-update version $newVer [skip ci]"
+          git commit -m "chore(gitops): auto-update employee-management to version $newVer [skip ci]"
           git push origin master
