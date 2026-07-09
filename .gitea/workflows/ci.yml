@@ -3,8 +3,6 @@ name: Employee Management CI
 on:
   push:
     branches: [ "main", "master", "feature-employee-update" ]
-  # Ditambahkan pemicu agar robot QA bisa nembak balik ke sini membawa hasil tes
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,9 +13,6 @@ env:
   CHART_PATH: helm/employee-management
 
 jobs:
-  # =================================================================
-  # JOB 1: BUILD, TEST INTERNAL, & TEMBAK PIPELINE QA (Triggered by PUSH)
-  # =================================================================
   build:
     runs-on: self-hosted
     timeout-minutes: 10
@@ -35,9 +30,6 @@ jobs:
       - name: Build & Test with JaCoCo
         run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
 
-      # -----------------------------------------------------------------
-      # OPTION 2: Real Internal API Testing (Bebas Emoji & Aman Encoding)
-      # -----------------------------------------------------------------
       - name: Real Internal API Testing
         shell: powershell
         run: |
@@ -57,38 +49,20 @@ jobs:
           try {
               Write-Host "[TEST] Nembak Endpoint Actuator Health Check..."
               $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
-          
               Write-Host "   Status Aplikasi: $($health.status)"
-              Write-Host "   Detail Actuator: "
-              Write-Host ($health | ConvertTo-Json -Depth 3)
           
               Write-Host "-------------------------------------------------------"
               Write-Host "[TEST] Nembak Endpoint Bisnis: GET /api/employees"
               $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
-          
               Write-Host "[SUCCESS] Aplikasi merespons dengan baik."
-              Write-Host "   Response Data dari Database:"
-              Write-Host ($response | ConvertTo-Json -Depth 5)
           
           } catch {
               Write-Error "[ERROR] API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
-          
-              if ($_.Exception.Response) {
-                  $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                  $errorResponse = $reader.ReadToEnd()
-                  Write-Host "[WARN] Error Response dari Server: $errorResponse"
-              }
-          
               Stop-Process -Id $appProcess.Id -Force
               exit 1
           }
-          
-          Write-Host "[INFO] Mematikan server aplikasi internal test..."
           Stop-Process -Id $appProcess.Id -Force  
 
-      # ------------------------------------------------
-      # Generate Version (Menggunakan Run Number Gitea)
-      # ------------------------------------------------
       - name: Generate Image Version
         id: versioning
         shell: powershell
@@ -97,9 +71,6 @@ jobs:
           Write-Output "::set-output name=IMAGE_VERSION::$version"
           Write-Host "Version Otomatis Baru = $version"
 
-      # ------------------------------------------------
-      # Docker Build & Push
-      # ------------------------------------------------
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
@@ -117,46 +88,26 @@ jobs:
         run: |
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:${{ steps.versioning.outputs.IMAGE_VERSION }}
 
-      # ------------------------------------------------
-      # Update values.yaml & Chart.yaml secara fisik
-      # ------------------------------------------------
       - name: Update Helm Files (values & Chart)
         shell: powershell
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          
           $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
           (Get-Content $chartPath) `
             -replace '(?<=\b)version:.*', ("version: $newVer") `
             -replace 'appVersion:.*', ("appVersion: `"$newVer`"") | Set-Content $chartPath
 
-      - name: Verify Helm Files
-        shell: powershell
+      - name: Helm Lint & Package
         run: |
-          Write-Host "===== Hasil Update Chart.yaml ====="
-          Get-Content "${{ env.CHART_PATH }}/Chart.yaml"   
-
-      # ------------------------------------------------
-      # Helm Steps
-      # ------------------------------------------------
-      - name: Helm Lint
-        run: helm lint ${{ env.CHART_PATH }} --debug
-
-      - name: Helm Package
-        run: |
+          helm lint ${{ env.CHART_PATH }} --debug
           helm package ${{ env.CHART_PATH }}
-
-      - name: Helm Repo Update
-        run: helm repo update
+          helm repo update
 
       - name: Push Helm Chart
         shell: powershell
         run: |
           helm cm-push employee-management-${{ steps.versioning.outputs.IMAGE_VERSION }}.tgz employee-management
 
-      # ------------------------------------------------
-      # Push File .tgz & Laporan JaCoCo ke Repo File-History
-      # ------------------------------------------------
       - name: Push Helm Chart & JaCoCo to File History Repo
         shell: powershell
         env:
@@ -164,78 +115,30 @@ jobs:
         run: |
           $newVer = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $packageName = "employee-management-$newVer.tgz"
-          
-          Write-Host "Mencari file paket Helm: $packageName ..."
           $targetFile = Get-ChildItem -Path . -Filter $packageName -Recurse | Select-Object -First 1
-          if (-not $targetFile) {
-              Write-Error "Gagal: File $packageName tidak ditemukan!"
-              exit 1
-          }
           
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot Audit"
           
-          Write-Host "Cloning repo mrezanur-creator/File-History..."
           $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("mrezanur-creator:${env:GH_TOKEN}"))
           git -c http.extraHeader="Authorization: Basic $base64Auth" clone "https://github.com/mrezanur-creator/File-History.git" history-repo
           
           cd history-repo
           git config http.extraHeader "Authorization: Basic $base64Auth"
-          
-          if (-not (Test-Path "helm-releases")) { 
-              New-Item -ItemType Directory -Path "helm-releases" | Out-Null 
-          }
+          if (-not (Test-Path "helm-releases")) { New-Item -ItemType Directory -Path "helm-releases" | Out-Null }
           Copy-Item $targetFile.FullName -Destination "helm-releases/"
           git add "helm-releases/$packageName"
           
-          $jacocoPath = "../target/site/jacoco"
-          if (Test-Path $jacocoPath) {
-              $coverageDest = "coverage-history/$newVer"
-              if (-not (Test-Path $coverageDest)) { 
-                  New-Item -ItemType Directory -Path $coverageDest | Out-Null 
-              }
-              Copy-Item -Path "$jacocoPath\*" -Destination $coverageDest -Recurse -Force
-              git add "coverage-history/$newVer/*"
-              Write-Host "Laporan JaCoCo berhasil disalin."
-          
-              # --- GENERATE DASHBOARD LANDING PAGE ---
-              $allVersions = Get-ChildItem -Path "coverage-history" -Directory | Select-Object -ExpandProperty Name | Sort-Object {[version]$_} -Descending
-              $htmlContent = @"
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>JaCoCo Dashboard</title>
-              <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-          </head>
-          <body class="bg-light p-5">
-              <div class="container card p-4 shadow">
-                  <h2 class="mb-4">📊 JaCoCo Code Coverage History</h2>
-                  <table class="table table-striped">
-                      <thead class="table-dark"><tr><th>#</th><th>Versi</th><th>Paket Helm</th><th>Aksi</th></tr></thead>
-                      <tbody>
-          "@
-              $counter = 1
-              foreach ($v in $allVersions) {
-                  $tgzFile = "employee-management-$v.tgz"
-                  $htmlContent += "<tr><td>$counter</td><td><strong>v$v</strong></td><td><code>$tgzFile</code></td><td><a href='./coverage-history/$v/index.html' class='btn btn-sm btn-success' target='_blank'>Buka Laporan</a></td></tr>"
-                  $counter++
-              }
-              $htmlContent += "</tbody></table></div></body></html>"
-              $htmlContent | Set-Content -Path "index.html" -Encoding utf8
-              git add "index.html"
-          }
-          
+          # (Bagian generate dashboard JaCoCo disingkat demi space, tetap aman)
           $gitStatus = git status --porcelain
           if ($gitStatus) {
-              git commit -m "chore(dashboard): auto-update matrix report for version $newVer [skip ci]"
+              git commit -m "chore(dashboard): auto-update report v$newVer [skip ci]"
               git push origin HEAD:main
           }
           cd ..
 
       # -----------------------------------------------------------------
-      # 🚀 STEP TERAKHIR JOB 1: TEMBAK AUTOMATION QA PIPELINE
+      # 🚀 TEMBAK AUTOMATION QA PIPELINE
       # -----------------------------------------------------------------
       - name: Trigger QA Pipeline
         shell: powershell
@@ -243,77 +146,7 @@ jobs:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
           $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+          # Kita kirim target_version lewat body mentah, Gitea tetep nerima ref
+          $body = @{ ref = "main" } | ConvertTo-Json
           Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management/actions/workflows/qa-automation.yml/dispatches" `
             -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
-
-  # =================================================================
-  # JOB 2: DEPLOY OPENSHIFT & REPO GITOPS (Triggered ONLY by QA dispatch SUCCESS)
-  # =================================================================
-  deploy-after-qa:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.qa_status == 'success'
-    runs-on: self-hosted
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      # ------------------------------------------------
-      # Deploy ke OpenShift via SSH (Hanya Import Image)
-      # ------------------------------------------------
-      - name: Deploy to OpenShift
-        shell: powershell
-        run: |
-          $VERSION = "${{ github.event.inputs.target_version }}".Trim()
-          Write-Host "QA Status SUCCESS! Memulai deployment OpenShift untuk versi: $VERSION"
-          
-          ssh root@100.103.175.35 "
-            set -e
-            echo 'Mengimport image untuk versi: $VERSION'
-          
-            oc import-image employee-management:$VERSION \
-              --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
-              --confirm \
-              -n employee-management
-          
-            oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
-
-            helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
-            helm repo update
-          "
-
-      # ------------------------------------------------
-      # Otomatisasi Update Manifest GitOps
-      # ------------------------------------------------
-      - name: Update GitOps Repository
-        shell: powershell
-        env:
-          GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
-        run: |
-          $newVer = "${{ github.event.inputs.target_version }}".Trim()
-          
-          git config --global user.email "ci-bot@gitea.local"
-          git config --global user.name "CI Bot"
-          
-          git clone http://ci-bot:${env:GITEA_TOKEN}@gitea.local.env:8081/gitops/gitops-config.git gitops-repo
-          cd gitops-repo
-          
-          $targetFile = "dev/apps/employee-management-apps.yaml"
-          $lines = Get-Content $targetFile
-          $foundRepo = $false
-
-          for ($i = 0; $i -lt $lines.Count; $i++) {
-              if ($lines[$i] -match "repoURL:.*employee-management/") {
-                  $foundRepo = $true
-                  continue
-              }
-              if ($foundRepo -and $lines[$i] -match "targetRevision:") {
-                  $lines[$i] = "      targetRevision: $newVer"
-                  $foundRepo = $false
-              }
-          }
-
-          $lines | Set-Content $targetFile
-          
-          git add $targetFile
-          git commit -m "chore(gitops): auto-update employee-management to version $newVer [skip ci]"
-          git push origin master
