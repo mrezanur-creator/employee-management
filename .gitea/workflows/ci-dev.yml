@@ -7,10 +7,10 @@ on:
     inputs:
       qa_status:
         description: 'Status dari QA'
-        required: true
+        required: false
       target_version:
         description: 'Versi yang dilanjutkan'
-        required: true
+        required: false
 
 permissions:
   contents: read
