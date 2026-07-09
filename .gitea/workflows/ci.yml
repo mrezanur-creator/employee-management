@@ -54,16 +54,30 @@ jobs:
           try {
               Write-Host "🔍 Nembak Endpoint Actuator Health Check..."
               $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
-              Write-Host "   Status Aplikasi: $($health.status)"
           
+              # MENAMPILKAN STATUS DARI ACTUATOR (Biasanya hasilnya: UP)
+              Write-Host "   Status Aplikasi: $($health.status)"
+              Write-Host "   Detail Actuator: " ($health | ConvertTo-Json -Depth 3)
+          
+              Write-Host "-------------------------------------------------------"
               Write-Host "🔍 Nembak Endpoint Bisnis: GET /api/employees"
               $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
+          
+              # MENAMPILKAN RESPONSE BODY ASLI (Daftar Employee dalam bentuk JSON)
               Write-Host "✅ Sukses! Aplikasi merespons dengan baik."
+              Write-Host "📦 Response Data dari Database:"
+              Write-Host ($response | ConvertTo-Json -Depth 5)
           
           } catch {
               Write-Error "❌ API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
           
-              # FORCE SHUTDOWN: Matikan paksa aplikasinya agar port tidak menggantung
+              # Jika gagal, coba intip apakah ada response error dari server
+              if ($_.Exception.Response) {
+                  $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                  $errorResponse = $reader.ReadToEnd()
+                  Write-Host "⚠️ Error Response dari Server: $errorResponse"
+              }
+          
               Stop-Process -Id $appProcess.Id -Force
               exit 1
           }
