@@ -243,12 +243,11 @@ jobs:
         shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
-        run: |
-          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          # ref diganti ke 'main' agar sesuai dengan branch utama repositori Gitea lu
-          $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yml/dispatches" `
-            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+          run: |
+            $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+            $body = @{ ref = "main"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+            Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management/actions/workflows/qa-automation.yml/dispatches" `
+              -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
 
   # =================================================================
   # JOB 2: DEPLOY OPENSHIFT & REPO GITOPS (Triggered by QA Pipeline SUCCESS)
