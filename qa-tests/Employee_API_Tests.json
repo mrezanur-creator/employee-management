@@ -1,0 +1,24 @@
+{
+  "info": {
+    "name": "Employee API Automation Test",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Skenario 1: Ambil Semua Karyawan",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:8082/api/employees", "protocol": "http", "host": ["localhost"], "port": "8082", "path": ["api", "employees"] }
+      }
+    },
+    {
+      "name": "Skenario 2: Cari ID Palsu harus 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:8082/api/employees/999999", "protocol": "http", "host": ["localhost"], "port": "8082", "path": ["api", "employees", "999999"] }
+      }
+    }
+  ]
+}

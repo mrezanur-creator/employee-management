@@ -1,0 +1,47 @@
+name: QA Automation Stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'Versi aplikasi dari Dev'
+        required: true
+
+jobs:
+  heavy-qa-testing:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # JALANKAN TEST SUITE UTAMA QA
+      # -----------------------------------------------------------------
+      - name: Run Postman Collection Test Suite
+        shell: powershell
+        run: |
+          $ver = "${{ github.event.inputs.target_version }}"
+          Write-Host "========================================================"
+          Write-Host " TIM QA: RUNNING AUTOMATION VIA NEWMAN - VERSI $ver "
+          Write-Host "========================================================"
+          
+          # Menjalankan file test postman yang ada di folder qa-tests
+          # Jika ada skenario yang gagal, Newman otomatis melempar exit code 1 (menggagalkan pipeline)
+          newman run qa-tests/Employee_API_Tests.json --reporters cli
+
+      # -----------------------------------------------------------------
+      # PEMICU BALIK KE CI-DEV (Hanya jalan kalau Newman di atas LULUS 100%)
+      # -----------------------------------------------------------------
+      - name: Trigger Back to CI Dev Pipeline
+        shell: powershell
+        env:
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          $ver = "${{ github.event.inputs.target_version }}"
+          Write-Host "[QA] Mengirim sinyal sukses kembali ke CI-Dev..."
+          
+          $body = @{ ref = "master"; inputs = @{ qa_status = "success"; target_version = $ver } } | ConvertTo-Json
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/ci-dev.yaml/dispatches" `
+            -Method Post `
+            -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } `
+            -Body $body

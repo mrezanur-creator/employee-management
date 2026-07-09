@@ -1,0 +1,210 @@
+name: Employee Management CI
+
+on:
+  push:
+    branches: [ "main", "master", "feature-employee-update" ]
+  workflow_dispatch:
+    inputs:
+      qa_status:
+        description: 'Status dari QA'
+        required: true
+      target_version:
+        description: 'Versi yang dilanjutkan'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: employee-management
+  CHART_PATH: helm/employee-management
+
+jobs:
+  # STAGE 1: Jalan otomatis pas lu PUSH kodingan
+  build-and-trigger-qa:
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+    outputs:
+      IMAGE_VERSION: ${{ steps.versioning.outputs.IMAGE_VERSION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Build & Test with JaCoCo
+        run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
+
+      # -----------------------------------------------------------------
+      # OPTION 2: Real Internal API Testing (Bebas Emoji & Aman Encoding)
+      # -----------------------------------------------------------------
+      - name: Real Internal API Testing
+        shell: powershell
+        run: |
+          # Tambahkan ini di baris pertama step "Real Internal API Testing" jika port sering macet
+          Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
+          Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
+          
+          # 1. Cari file .jar hasil build Maven secara dinamis
+          $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
+          if (-not $jarFile) {
+              Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
+              exit 1
+          }
+          
+          # 2. Jalankan JAR di port 8082 secara terpisah (background)
+          $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
+          Write-Host "[INFO] Menunggu server Tomcat internal naik (15 detik)..."
+          Start-Sleep -Seconds 15
+          
+          # 3. Eksekusi Test HTTP Request
+          try {
+              Write-Host "[TEST] Nembak Endpoint Actuator Health Check..."
+              $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
+          
+              Write-Host "   Status Aplikasi: $($health.status)"
+              Write-Host "   Detail Actuator: "
+              Write-Host ($health | ConvertTo-Json -Depth 3)
+          
+              Write-Host "-------------------------------------------------------"
+              Write-Host "[TEST] Nembak Endpoint Bisnis: GET /api/employees"
+              $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
+          
+              Write-Host "[SUCCESS] Aplikasi merespons dengan baik."
+              Write-Host "   Response Data dari Database:"
+              Write-Host ($response | ConvertTo-Json -Depth 5)
+          
+          } catch {
+              Write-Error "[ERROR] API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
+          
+              if ($_.Exception.Response) {
+                  $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                  $errorResponse = $reader.ReadToEnd()
+                  Write-Host "[WARN] Error Response dari Server: $errorResponse"
+              }
+          
+              # Pastikan proses dimatikan jika error
+              Stop-Process -Id $appProcess.Id -Force
+              exit 1
+          }
+          
+          # 4. Bersihkan proses setelah sukses
+          Write-Host "[INFO] Mematikan server aplikasi internal test..."
+          Stop-Process -Id $appProcess.Id -Force  
+
+
+      - name: Generate Image Version
+        id: versioning
+        shell: powershell
+        run: |
+          $version="1.0.${{ github.run_number }}"
+          "$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build & Push Docker
+        shell: powershell
+        run: |
+          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:$ver .
+          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:$ver
+
+      - name: Trigger QA Pipeline
+          shell: powershell
+          env:
+            GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
+          run: |
+            $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+            $body = @{ ref = "master"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+            Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yaml/dispatches" `
+              -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+
+  # STAGE 2: Hanya jalan kalau di-trigger balik oleh QA Automation
+  deploy-after-qa:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.qa_status == 'success'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update Helm Files (values & Chart)
+        shell: powershell
+        run: |
+          $newVer = "${{ github.event.inputs.target_version }}"
+          $chartPath = "${{ env.CHART_PATH }}/Chart.yaml"
+          (Get-Content $chartPath) `
+            -replace '(?<=\b)version:.*', ("version: $newVer") `
+            -replace 'appVersion:.*', ("appVersion: `"$newVer`"") | Set-Content $chartPath
+
+      - name: Helm Package & Push
+        run: |
+          helm package ${{ env.CHART_PATH }}
+          helm repo update
+          helm cm-push employee-management-${{ github.event.inputs.target_version }}.tgz employee-management
+
+      - name: Push Helm Chart & JaCoCo to File History Repo
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          $newVer = "${{ github.event.inputs.target_version }}"
+          $packageName = "employee-management-$newVer.tgz"
+          git config --global user.email "ci-bot@gitea.local"
+          git config --global user.name "CI Bot Audit"
+          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("mrezanur-creator:${env:GH_TOKEN}"))
+          git -c http.extraHeader="Authorization: Basic $base64Auth" clone "https://github.com/mrezanur-creator/File-History.git" history-repo
+          cd history-repo
+          git config http.extraHeader "Authorization: Basic $base64Auth"
+          if (-not (Test-Path "helm-releases")) { New-Item -ItemType Directory -Path "helm-releases" | Out-Null }
+          Copy-Item "../$packageName" -Destination "helm-releases/"
+          git add "helm-releases/$packageName"
+          $gitStatus = git status --porcelain
+          if ($gitStatus) {
+              git commit -m "chore(dashboard): auto-update report version $newVer [skip ci]"
+              git push origin HEAD:main
+          }
+          cd ..
+
+      - name: Deploy to OpenShift
+        shell: powershell
+        run: |
+          $VERSION = "${{ github.event.inputs.target_version }}".Trim()
+          ssh root@100.103.175.35 "
+            set -e
+            oc import-image employee-management:$VERSION --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION --confirm -n employee-management
+          "
+
+      - name: Update GitOps Repository
+        shell: powershell
+        env:
+          GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          $newVer = "${{ github.event.inputs.target_version }}"
+          git config --global user.email "ci-bot@gitea.local"
+          git config --global user.name "CI Bot"
+          git clone http://ci-bot:${env:GITEA_TOKEN}@gitea.local.env:8081/gitops/gitops-config.git gitops-repo
+          cd gitops-repo
+          $targetFile = "dev/apps/employee-management-apps.yaml"
+          $lines = Get-Content $targetFile
+          $foundRepo = $false
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match "repoURL:.*employee-management/") { $foundRepo = $true; continue }
+              if ($foundRepo -and $lines[$i] -match "targetRevision:") {
+                  $lines[$i] = "      targetRevision: $newVer"
+                  $foundRepo = $false
+              }
+          }
+          $lines | Set-Content $targetFile
+          git add $targetFile
+          git commit -m "chore(gitops): auto-update version $newVer [skip ci]"
+          git push origin master
