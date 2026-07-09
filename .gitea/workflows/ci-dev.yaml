@@ -120,14 +120,14 @@ jobs:
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:$ver
 
       - name: Trigger QA Pipeline
-          shell: powershell
-          env:
-            GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
-          run: |
-            $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-            $body = @{ ref = "master"; inputs = @{ target_version = $ver } } | ConvertTo-Json
-            Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yaml/dispatches" `
-              -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+        shell: powershell
+        env:
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $body = @{ ref = "master"; inputs = @{ target_version = $ver } } | ConvertTo-Json
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/qa-automation.yaml/dispatches" `
+            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
 
   # STAGE 2: Hanya jalan kalau di-trigger balik oleh QA Automation
   deploy-after-qa:
@@ -182,6 +182,8 @@ jobs:
           ssh root@100.103.175.35 "
             set -e
             oc import-image employee-management:$VERSION --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION --confirm -n employee-management
+            #DIminta mas pab sama maceng buat kasi tag untuk prod
+            oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
           "
 
       - name: Update GitOps Repository
