@@ -41,7 +41,7 @@ jobs:
           Write-Host "[QA] Mengirim sinyal sukses kembali ke CI-Dev..."
           
           $body = @{ ref = "master"; inputs = @{ qa_status = "success"; target_version = $ver } } | ConvertTo-Json
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/ci-dev.yaml/dispatches" `
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/${{ github.repository }}/actions/workflows/ci.yaml/dispatches" `
             -Method Post `
             -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } `
             -Body $body
