@@ -145,13 +145,20 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          # Bodi JSON wajib menyertakan ref branch utama
+          $body = @{ 
+            ref = "main"
+          } | ConvertTo-Json
           
-          # GUNAKAN FULL REF AGAR GITEA GAK KESASAR (refs/heads/nama-branch)
-          $body = @{ ref = "refs/heads/main" } | ConvertTo-Json
+          Write-Host "[INFO] Menembak Gitea Native Repository Action Dispatch..."
           
-          Write-Host "[INFO] Mencoba nembak QA Pipeline dengan full ref..."
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management2/actions/workflows/qa-automation.yml/dispatches" `
-            -Method Post -Headers @{ "Authorization" = "token ${env:GITEA_TOKEN}"; "Content-Type" = "application/json" } -Body $body
+          # Kita pakai rute resmi Gitea API Core untuk memicu repositori dispatch event
+          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management2/dispatches" `
+            -Method Post `
+            -Headers @{ 
+              "Authorization" = "token ${env:GITEA_TOKEN}"; 
+              "Content-Type" = "application/json" 
+            } `
+            -Body $body
           
-          Write-Host "[SUCCESS] Bola ping-pong berhasil di-smash ke area QA!"
+          Write-Host "[SUCCESS] Bola ping-pong berhasil meluncur tanpa 404!"
