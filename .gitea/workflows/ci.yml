@@ -31,60 +31,61 @@ jobs:
         run: mvn clean verify "-Dmaven.repo.local=C:\Users\Alpabit\.m2\repository"
 
       # -----------------------------------------------------------------
-      # OPTION 2: Real Internal API Testing (Ditaruh tepat setelah Build)
+      # OPTION 2: Real Internal API Testing (Bebas Emoji & Aman Encoding)
       # -----------------------------------------------------------------
       - name: Real Internal API Testing
         shell: powershell
         run: |
-          Write-Host "🚀 Menyalakan aplikasi Spring Boot secara riil di background..."
+          # Tambahkan ini di baris pertama step "Real Internal API Testing" jika port sering macet
+          Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
+          Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
           
           # 1. Cari file .jar hasil build Maven secara dinamis
           $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
           if (-not $jarFile) {
-              Write-Error "❌ File .jar tidak ditemukan di folder target!"
+              Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
               exit 1
           }
           
           # 2. Jalankan JAR di port 8082 secara terpisah (background)
           $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
-          Write-Host "⏳ Menunggu server Tomcat internal naik (15 detik)..."
+          Write-Host "[INFO] Menunggu server Tomcat internal naik (15 detik)..."
           Start-Sleep -Seconds 15
           
           # 3. Eksekusi Test HTTP Request
           try {
-              Write-Host "🔍 Nembak Endpoint Actuator Health Check..."
+              Write-Host "[TEST] Nembak Endpoint Actuator Health Check..."
               $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
           
-              # MENAMPILKAN STATUS DARI ACTUATOR (Biasanya hasilnya: UP)
               Write-Host "   Status Aplikasi: $($health.status)"
-              Write-Host "   Detail Actuator: " ($health | ConvertTo-Json -Depth 3)
+              Write-Host "   Detail Actuator: "
+              Write-Host ($health | ConvertTo-Json -Depth 3)
           
               Write-Host "-------------------------------------------------------"
-              Write-Host "🔍 Nembak Endpoint Bisnis: GET /api/employees"
+              Write-Host "[TEST] Nembak Endpoint Bisnis: GET /api/employees"
               $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
           
-              # MENAMPILKAN RESPONSE BODY ASLI (Daftar Employee dalam bentuk JSON)
-              Write-Host "✅ Sukses! Aplikasi merespons dengan baik."
-              Write-Host "📦 Response Data dari Database:"
+              Write-Host "[SUCCESS] Aplikasi merespons dengan baik."
+              Write-Host "   Response Data dari Database:"
               Write-Host ($response | ConvertTo-Json -Depth 5)
           
           } catch {
-              Write-Error "❌ API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
+              Write-Error "[ERROR] API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
           
-              # Jika gagal, coba intip apakah ada response error dari server
               if ($_.Exception.Response) {
                   $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
                   $errorResponse = $reader.ReadToEnd()
-                  Write-Host "⚠️ Error Response dari Server: $errorResponse"
+                  Write-Host "[WARN] Error Response dari Server: $errorResponse"
               }
           
+              # Pastikan proses dimatikan jika error
               Stop-Process -Id $appProcess.Id -Force
               exit 1
           }
           
           # 4. Bersihkan proses setelah sukses
-          Write-Host "🛑 Mematikan server aplikasi internal test..."
-          Stop-Process -Id $appProcess.Id -Force        
+          Write-Host "[INFO] Mematikan server aplikasi internal test..."
+          Stop-Process -Id $appProcess.Id -Force  
 
       # ------------------------------------------------
       # Generate Version (Menggunakan Run Number Gitea)
