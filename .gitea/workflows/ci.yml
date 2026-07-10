@@ -138,27 +138,26 @@ jobs:
           cd ..
 
       # -----------------------------------------------------------------
-      # 🚀 STEP TERAKHIR DI GITEA REZA: BANGUNIN ROBOT QA
+      # 🚀 STEP TERAKHIR: BYPASS API, TRIGGER QA VIA GIT TAG
       # -----------------------------------------------------------------
-      - name: Trigger QA Pipeline
+      - name: Trigger QA Pipeline via Git Tag
         shell: powershell
         env:
-          GITEA_TOKEN: ${{ secrets.QA_TOKEN }} # Pake token tim-qa yang valid
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # Bodi JSON wajib menyertakan branch utama (main)
-          $body = @{ 
-            ref = "main"
-          } | ConvertTo-Json
+          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
+          $tagName = "qa-$ver"
           
-          Write-Host "[INFO] Menembak Gitea Native Repository Dispatch..."
+          Write-Host "[INFO] Membuat Git Tag lokal baru: $tagName..."
           
-          # Ini rute resmi Core Gitea API untuk memicu event antar-repo!
-          Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management2/dispatches" `
-            -Method Post `
-            -Headers @{ 
-              "Authorization" = "token ${env:GITEA_TOKEN}"; 
-              "Content-Type"  = "application/json" 
-            } `
-            -Body $body
+          # Inject token auth ke Git Header biar bisa push otomatis
+          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("tim-qa:${env:GITEA_TOKEN}"))
+          git config http.extraHeader "Authorization: Basic $base64Auth"
+          git config --global user.email "tim-qa@gitea.local"
+          git config --global user.name "Tim QA Automation"
           
-          Write-Host "[SUCCESS] Bola ping-pong berhasil dikirim ke tim-qa!"
+          # Bikin tag fisik dan push ke origin (Gitea reza)
+          git tag $tagName
+          git push origin $tagName
+          
+          Write-Host "[SUCCESS] Tag $tagName berhasil dipush! Pintu 2 terbuka otomatis."

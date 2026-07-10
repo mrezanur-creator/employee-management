@@ -55,12 +55,11 @@ spec:
 
 strategy:
   canary:
-  {{ if .Values.rollout.canary.enabled }}
-stableService: {{ include "employee-management-chart.fullname" . }}
-canaryService: {{ include "employee-management-chart.fullname" . }}-canary
-  {{ end }}
-maxSurge: {{ .Values.rollout.canary.maxSurge }}
-maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
+    stableService: {{ include "employee-management-chart.fullname" . }}
+    canaryService: {{ include "employee-management-chart.fullname" . }}-canary
 
-steps:
+    maxSurge: {{ .Values.rollout.canary.maxSurge }}
+    maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
+
+    steps:
   {{ toYaml .Values.rollout.canary.steps | nindent 8 }}
