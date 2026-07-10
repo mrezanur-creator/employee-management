@@ -7,7 +7,7 @@ metadata:
 
 spec:
   replicas: {{ .Values.replicaCount }}
-  revisionHistoryLimit: 3
+  revisionHistoryLimit: {{ .Values.rollout.revisionHistoryLimit }}
 
   selector:
     matchLabels:
@@ -51,18 +51,16 @@ spec:
                   key: datasource-password
 
           resources:
-{{ toYaml .Values.resources | nindent 12 }}
+  {{ toYaml .Values.resources | nindent 12 }}
 
-  strategy:
-    canary:
-
+strategy:
+  canary:
   {{- if .Values.rollout.canary.enabled }}
-  stableService: {{ include "employee-management-chart.fullname" . }}
-  canaryService: {{ include "employee-management-chart.fullname" . }}-canary
+stableService: {{ include "employee-management-chart.fullname" . }}
+canaryService: {{ include "employee-management-chart.fullname" . }}-canary
   {{- end }}
+maxSurge: {{ .Values.rollout.canary.maxSurge }}
+maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
 
-      maxSurge: {{ .Values.rollout.canary.maxSurge }}
-      maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
-
-      steps:
-{{ toYaml .Values.rollout.canary.steps | nindent 8 }}
+steps:
+  {{ toYaml .Values.rollout.canary.steps | nindent 8 }}
