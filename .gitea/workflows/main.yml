@@ -2,8 +2,8 @@ name: Employee Management CD (Deploy After QA)
 
 on:
   push:
-    tags:
-      - 'qa-*'
+    branches:
+      - main
 env:
   CHART_PATH: helm/employee-management
 
