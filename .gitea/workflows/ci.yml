@@ -140,24 +140,27 @@ jobs:
       - name: Trigger QA Pipeline via Git Tag
         shell: powershell
         env:
-          GITEA_TOKEN: ${{ secrets.QA_TOKEN }} # Pastikan token tim-qa ini sudah lu daftarkan di Secrets Repo GitHub lu
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # 1. Ambil nomor versi otomatis dari step versioning sebelumnya
+          # 🤫 Jinakkan PowerShell biar gak sensitif sama error buatan Git
+          $ErrorActionPreference = 'SilentlyContinue'
+          
+          # 1. Ambil nomor versi otomatis
           $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $tagName = "qa-$ver"
           
           Write-Host "[INFO] Membuat Git Tag lokal baru untuk QA: $tagName..."
           
-          # 2. Hapus remote "gitea-target" jika ada sisa cache di runner biar gak tabrakan
-          git remote remove gitea-target 2>$null
+          # 2. Hapus remote lama (sekarang aman, kalau gak ada bakal dilewatin tanpa bikin error merah)
+          git remote remove gitea-target
           
-          # 3. Daftarkan jalur tol langsung ke Gitea reza (inject token tim-qa langsung di URL-nya)
+          # 3. Daftarkan jalur tol langsung ke Gitea reza
           git remote add gitea-target "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
           
           # 4. Buat tag fisik secara lokal di runner
           git tag $tagName
           
-          # 5. Push tag spesifik ke remote Gitea (bukan origin GitHub!)
+          # 5. Push tag spesifik ke remote Gitea
           git push gitea-target $tagName
           
           Write-Host "[SUCCESS] Tag $tagName berhasil dipush ke Gitea! Pintu 2 terbuka otomatis."
