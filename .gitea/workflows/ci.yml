@@ -142,25 +142,25 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # 🤫 Jinakkan PowerShell biar gak sensitif sama error buatan Git
           $ErrorActionPreference = 'SilentlyContinue'
           
-          # 1. Ambil nomor versi otomatis
+          # 1. Ambil nomor versi otomatis dari step sebelumnya
           $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $tagName = "qa-$ver"
           
-          Write-Host "[INFO] Membuat Git Tag lokal baru untuk QA: $tagName..."
-          
-          # 2. Hapus remote lama (sekarang aman, kalau gak ada bakal dilewatin tanpa bikin error merah)
+          # 2. Setup Remote Gitea Target
           git remote remove gitea-target
-          
-          # 3. Daftarkan jalur tol langsung ke Gitea reza
           git remote add gitea-target "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
           
-          # 4. Buat tag fisik secara lokal di runner
+          # 🚀 STRATEGI SAKTI: Push kodingan/branch main dulu ke Gitea biar file main.yml sinkron!
+          Write-Host "[INFO] Sinkronisasi file workflow ke branch main Gitea..."
+          git push gitea-target main --force
+          
+          # 3. Baru setelah itu buat tag lokal di atas commit yang sudah sinkron
+          Write-Host "[INFO] Membuat Git Tag lokal baru untuk QA: $tagName..."
           git tag $tagName
           
-          # 5. Push tag spesifik ke remote Gitea
+          # 4. Push tag spesifik ke remote Gitea
           git push gitea-target $tagName
           
-          Write-Host "[SUCCESS] Tag $tagName berhasil dipush ke Gitea! Pintu 2 terbuka otomatis."
+          Write-Host "[SUCCESS] Branch dan Tag $tagName berhasil dipush! Pintu Gitea QA otomatis berputar!"
