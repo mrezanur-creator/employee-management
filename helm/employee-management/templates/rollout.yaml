@@ -17,6 +17,7 @@ spec:
     metadata:
       labels:
         app: {{ include "employee-management-chart.name" . }}
+        version: "{{ default .Chart.AppVersion .Values.image.tag }}"
 
     spec:
       containers:
