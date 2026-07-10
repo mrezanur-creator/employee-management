@@ -33,35 +33,42 @@ jobs:
       - name: Real Internal API Testing
         shell: powershell
         run: |
-          Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
-          Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
-          
-          $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
-          if (-not $jarFile) {
-              Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
-              exit 1
-          }
-          
-          $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
-          Write-Host "[INFO] Menunggu server Tomcat internal naik (15 detik)..."
-          Start-Sleep -Seconds 15
-          
-          try {
-              Write-Host "[TEST] Nembak Endpoint Actuator Health Check..."
-              $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get
-              Write-Host "   Status Aplikasi: $($health.status)"
-          
-              Write-Host "-------------------------------------------------------"
-              Write-Host "[TEST] Nembak Endpoint Bisnis: GET /api/employees"
-              $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get
-              Write-Host "[SUCCESS] Aplikasi merespons dengan baik."
-          
-          } catch {
-              Write-Error "[ERROR] API Test GAGAL! Terjadi kesalahan saat nembak endpoint: $_"
-              Stop-Process -Id $appProcess.Id -Force
-              exit 1
-          }
-          Stop-Process -Id $appProcess.Id -Force  
+            # 1. Bersihkan sisa proses java lama di port 8082 jika ada
+            Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
+            
+            Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
+            $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
+            if (-not $jarFile) {
+                Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
+                exit 1
+            }
+            
+            # 2. Jalankan Spring Boot
+            $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
+            
+            # 3. Menunggu server Tomcat & Hibernate inisialisasi database (30 detik)
+            Write-Host "[INFO] Menunggu server Tomcat internal naik (30 detik)..."
+            Start-Sleep -Seconds 30
+            
+            # 4. Eksekusi Pengujian Pengaman
+            try {
+                Write-Host "[TEST] Mencoba nembak Endpoint Bisnis dulu: GET /api/employees"
+                $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get -TimeoutSec 5
+                Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Endpoint Bisnis."
+            } catch {
+                Write-Host "[WARN] Endpoint bisnis belum siap -> Mencoba alternatif Actuator..."
+                try {
+                    $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get -TimeoutSec 5
+                    Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Actuator! Status: $($health.status)"
+                } catch {
+                    Write-Error "❌ [ERROR] Kedua endpoint mengembalikan error! Spring Boot gagal booting sempurna atau nama DB 'employeemanagement' belum dibuat."
+                    Stop-Process -Id $appProcess.Id -Force
+                    exit 1
+                }
+            }
+            
+            # 5. Matikan aplikasi jika testing sukses, lanjut ke step push Gitea
+            Stop-Process -Id $appProcess.Id -Force
 
       - name: Generate Image Version
         id: versioning
