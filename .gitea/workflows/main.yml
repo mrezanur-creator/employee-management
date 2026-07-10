@@ -18,10 +18,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Start Employee API App
+        shell: powershell
         run: |
-          docker rm -f employee-app-test || true
+          # Hapus container lama kalau ada, kalau gak ada buang errornya biar gak merah
+          docker rm -f employee-app-test 2>$null
+          
+          # Jalankan container baru menggunakan image terupdate dari GHCR
           docker run -d --name employee-app-test -p 8082:8082 ghcr.io/mrezanur-creator/employee-management:latest
-          Start-Sleep -Seconds 10 # Kasih waktu 10 detik biar app-nya bener-bener up
+          
+          # Kasih waktu 10 detik biar app-nya bener-bener up & port 8082 siap menerima request
+          Start-Sleep -Seconds 10
 
       # -----------------------------------------------------------------
       # 🚀 STEP 2: JALANKAN AUTOMATION TEST .JSON LU
@@ -29,12 +35,12 @@ jobs:
       - name: Execute Employee API Tests
         shell: powershell
         run: |
-          Write-Host "[START] Menjalankan Automated API Testing..."
+          Write-Host "[START] Menjalankan Automated API Testing via Newman..."
           
-          # Mengeksekusi file json lu dan memunculkan report rapi di log Gitea
+          # Jalankan testing Newman lu ke port 8082 yang udah nyala di localhost
           newman run "qa-tests/Employee_API_Tests.json" --color on
           
-          Write-Host "🟢 ALL API TESTS PASSED! Bersiap mengembalikan bola ke repo reza."
+          Write-Host "[SUCCESS] Semua API test berhasil dilewati dengan mulus!"
 
       # -----------------------------------------------------------------
       # 🏓 STEP 3: JIKA SUKSES, OPER BALIK BOLA PING-PONG KE REPO REZA
