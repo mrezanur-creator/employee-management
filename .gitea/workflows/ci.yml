@@ -138,27 +138,27 @@ jobs:
           cd ..
 
       # -----------------------------------------------------------------
-      # 🚀 STEP TERAKHIR JOB 1: TEMBAK AUTOMATION QA PIPELINE
+      # 🚀 STEP TERAKHIR DI GITEA REZA: BANGUNIN ROBOT QA
       # -----------------------------------------------------------------
       - name: Trigger QA Pipeline
         shell: powershell
         env:
-          GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }} # Pake token tim-qa yang valid
         run: |
-          # Bodi JSON wajib menyertakan ref branch utama
+          # Bodi JSON wajib menyertakan branch utama (main)
           $body = @{ 
             ref = "main"
           } | ConvertTo-Json
           
-          Write-Host "[INFO] Menembak Gitea Native Repository Action Dispatch..."
+          Write-Host "[INFO] Menembak Gitea Native Repository Dispatch..."
           
-          # Kita pakai rute resmi Gitea API Core untuk memicu repositori dispatch event
+          # Ini rute resmi Core Gitea API untuk memicu event antar-repo!
           Invoke-RestMethod -Uri "http://gitea.local.env:8081/api/v1/repos/reza/employee-management2/dispatches" `
             -Method Post `
             -Headers @{ 
               "Authorization" = "token ${env:GITEA_TOKEN}"; 
-              "Content-Type" = "application/json" 
+              "Content-Type"  = "application/json" 
             } `
             -Body $body
           
-          Write-Host "[SUCCESS] Bola ping-pong berhasil meluncur tanpa 404!"
+          Write-Host "[SUCCESS] Bola ping-pong berhasil dikirim ke tim-qa!"
