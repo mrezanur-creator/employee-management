@@ -17,6 +17,12 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      - name: Start Employee API App
+        run: |
+          docker rm -f employee-app-test || true
+          docker run -d --name employee-app-test -p 8082:8082 ghcr.io/mrezanur-creator/employee-management:latest
+          Start-Sleep -Seconds 10 # Kasih waktu 10 detik biar app-nya bener-bener up
+
       # -----------------------------------------------------------------
       # 🚀 STEP 2: JALANKAN AUTOMATION TEST .JSON LU
       # -----------------------------------------------------------------
