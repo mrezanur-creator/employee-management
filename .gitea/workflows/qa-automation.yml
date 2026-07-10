@@ -11,6 +11,9 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
+      - name: Cetak Path
+        run: echo "${{ env.CHART_PATH }}"
+
       - name: Checkout Repo
         uses: actions/checkout@v4
 
