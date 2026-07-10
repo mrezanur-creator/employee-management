@@ -17,71 +17,43 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # Trik pengganti inputs: Mengambil versi riil langsung dari Chart.yaml hasil build tadi
-      - name: Get Version From Chart
-        id: get_ver
+      # -----------------------------------------------------------------
+      # 🚀 STEP 2: JALANKAN AUTOMATION TEST .JSON LU
+      # -----------------------------------------------------------------
+      - name: Execute Employee API Tests
         shell: powershell
         run: |
-          $chartContent = Get-Content "${{ env.CHART_PATH }}/Chart.yaml"
-          $versionLine = $chartContent | Select-String -Pattern "version:"
-          $currentVer = ($versionLine -split ":")[1].Trim()
-          Write-Output "::set-output name=VERSION::$currentVer"
-          Write-Host "Mendeteksi versi otomatis dari Chart: $currentVer"
-
-      # ------------------------------------------------
-      # Deploy ke OpenShift via SSH
-      # ------------------------------------------------
-      - name: Deploy to OpenShift
-        shell: powershell
-        run: |
-          $VERSION = "${{ steps.get_ver.outputs.VERSION }}".Trim()
-          Write-Host "Memulai deployment OpenShift untuk versi: $VERSION"
+          Write-Host "[START] Menjalankan Automated API Testing..."
           
-          ssh root@100.103.175.35 "
-            set -e
-            echo 'Mengimport image untuk versi: $VERSION'
-            oc import-image employee-management:$VERSION \
-              --from='ghcr.io/${{ secrets.GHCR_USERNAME }}/employee-management:'$VERSION \
-              --confirm \
-              -n employee-management
+          # Mengeksekusi file json lu dan memunculkan report rapi di log Gitea
+          newman run "qa-tests/Employee_API_Tests.json" --color on
           
-            oc tag employee-management/employee-management:$VERSION employee-management-prod/employee-management-prod:$VERSION
-            helm repo add employee-management http://chartmuseum.local.env:8081/employee-management --force-update
-            helm repo update
-          "
+          Write-Host "🟢 ALL API TESTS PASSED! Bersiap mengembalikan bola ke repo reza."
 
-      # ------------------------------------------------
-      # Otomatisasi Update Manifest GitOps
-      # ------------------------------------------------
-      - name: Update GitOps Repository
+      # -----------------------------------------------------------------
+      # 🏓 STEP 3: JIKA SUKSES, OPER BALIK BOLA PING-PONG KE REPO REZA
+      # -----------------------------------------------------------------
+      - name: Test Success! Trigger Deploy in Reza Repo
         shell: powershell
+        if: success() # Hanya jalan kalau step testing di atas 100% sukses tanpa ada yang fail
         env:
-          GITEA_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.QA_TOKEN }} # Token tim-qa yang punya akses admin di repo reza
         run: |
-          $newVer = "${{ steps.get_ver.outputs.VERSION }}".Trim()
+          # Mengambil murni angka versi dari tag pengirim (misal qa-1.0.107 -> ambil 1.0.107)
+          $fullTag = "$env:GITHUB_REF_NAME"
+          $ver =$fullTag.Replace("qa-", "").Trim()
+          $deployTagName = "deploy-$ver"
           
-          git config --global user.email "ci-bot@gitea.local"
-          git config --global user.name "CI Bot"
+          Write-Host "[SUCCESS] Testing Aman! Mengirim tag balasan resmi: $deployTagName ke repo reza..."
           
-          git clone http://ci-bot:${env:GITEA_TOKEN}@gitea.local.env:8081/gitops/gitops-config.git gitops-repo
-          cd gitops-repo
+          # Hapus remote lama jika ada biar gak konflik pas di-run berulang kali
+          git remote remove reza-repo 2>$null
           
-          $targetFile = "dev/apps/employee-management-apps.yaml"
-          $lines = Get-Content $targetFile
-          $foundRepo = $false
-
-          for ($i = 0; $i -lt $lines.Count; $i++) {
-              if ($lines[$i] -match "repoURL:.*employee-management/") {
-                  $foundRepo = $true
-                  continue
-              }
-              if ($foundRepo -and $lines[$i] -match "targetRevision:") {
-                  $lines[$i] = "      targetRevision: $newVer"
-                  $foundRepo = $false
-              }
-          }
-          $lines | Set-Content $targetFile
+          # Inject Auth ke remote gitea repo reza
+          git remote add reza-repo "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
           
-          git add $targetFile
-          git commit -m "chore(gitops): auto-update employee-management to version $newVer [skip ci]"
-          git push origin master
+          # Buat tag deploy lokal lalu dorong ke repo reza
+          git tag $deployTagName
+          git push reza-repo $deployTagName
+          
+          Write-Host "🏓 BOLA DIKEMBALIKAN! Repo reza akan otomatis melanjutkan proses Deploy &
