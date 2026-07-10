@@ -33,39 +33,39 @@ jobs:
       - name: Real Internal API Testing
         shell: powershell
         run: |
-            # 1. Bersihkan sisa proses java lama di port 8082 jika ada
-            Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
-            
-            Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
-            $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
-            if (-not $jarFile) {
-                Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
-                exit 1
-            }
-            
-            # 2. Jalankan Spring Boot
-            $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
-            
-            # 3. Menunggu server Tomcat & Hibernate inisialisasi database (30 detik)
-            Write-Host "[INFO] Menunggu server Tomcat internal naik (30 detik)..."
-            Start-Sleep -Seconds 30
-            
-            # 4. Eksekusi Pengujian Pengaman
-            try {
-                Write-Host "[TEST] Mencoba nembak Endpoint Bisnis dulu: GET /api/employees"
-                $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get -TimeoutSec 5
-                Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Endpoint Bisnis."
-            } catch {
-                Write-Host "[WARN] Endpoint bisnis belum siap -> Mencoba alternatif Actuator..."
-                try {
-                    $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get -TimeoutSec 5
-                    Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Actuator! Status: $($health.status)"
-                } catch {
-                    Write-Error "❌ [ERROR] Kedua endpoint mengembalikan error! Spring Boot gagal booting sempurna atau nama DB 'employeemanagement' belum dibuat."
-                    Stop-Process -Id $appProcess.Id -Force
-                    exit 1
-                }
-            }
+          # 1. Bersihkan sisa proses java lama di port 8082 jika ada
+          Get-Process -Name java -ErrorAction SilentlyContinue | Where-Object { (Get-NetTCPConnection -LocalPort 8082 -ErrorAction SilentlyContinue).OwningProcess -contains $_.Id } | Stop-Process -Force
+          
+          Write-Host "[INFO] Menyalakan aplikasi Spring Boot secara riil di background..."
+          $jarFile = Get-ChildItem -Path target -Filter "*.jar" | Select-Object -First 1
+          if (-not $jarFile) {
+              Write-Error "[ERROR] File .jar tidak ditemukan di folder target!"
+              exit 1
+          }
+          
+          # 2. Jalankan Spring Boot
+          $appProcess = Start-Process java -ArgumentList "-jar $($jarFile.FullName) --server.port=8082" -WindowStyle Hidden -PassThru
+          
+          # 3. Menunggu server Tomcat & Hibernate inisialisasi database (30 detik)
+          Write-Host "[INFO] Menunggu server Tomcat internal naik (30 detik)..."
+          Start-Sleep -Seconds 30
+          
+          # 4. Eksekusi Pengujian Pengaman
+          try {
+              Write-Host "[TEST] Mencoba nembak Endpoint Bisnis dulu: GET /api/employees"
+              $response = Invoke-RestMethod -Uri "http://localhost:8082/api/employees" -Method Get -TimeoutSec 5
+              Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Endpoint Bisnis."
+          } catch {
+              Write-Host "[WARN] Endpoint bisnis belum siap -> Mencoba alternatif Actuator..."
+              try {
+                  $health = Invoke-RestMethod -Uri "http://localhost:8082/actuator/health" -Method Get -TimeoutSec 5
+                  Write-Host "🟢 [SUCCESS] Aplikasi merespons dengan baik via Actuator! Status: $($health.status)"
+              } catch {
+                  Write-Error "❌ [ERROR] Kedua endpoint mengembalikan error! Spring Boot gagal booting sempurna atau nama DB 'employeemanagement' belum dibuat."
+                  Stop-Process -Id $appProcess.Id -Force
+                  exit 1
+              }
+          }
           
           # 5. Matikan aplikasi jika testing sukses, tambah pengaman agar tidak error jika app sudah mati duluan
           Stop-Process -Id $appProcess.Id -Force -ErrorAction SilentlyContinue
@@ -75,7 +75,7 @@ jobs:
         shell: powershell
         run: |
           $version="1.0.${{ github.run_number }}"
-          Write-Output "::set-output name=IMAGE_VERSION::$version"
+          "$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Version Otomatis Baru = $version"
 
       - name: Login GHCR
@@ -136,7 +136,6 @@ jobs:
           Copy-Item $targetFile.FullName -Destination "helm-releases/"
           git add "helm-releases/$packageName"
           
-          # (Bagian generate dashboard JaCoCo disingkat demi space, tetap aman)
           $gitStatus = git status --porcelain
           if ($gitStatus) {
               git commit -m "chore(dashboard): auto-update report v$newVer [skip ci]"
@@ -149,11 +148,9 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # 1. Setup Remote Gitea Target
           try { git remote remove gitea-target } catch {}
           git remote add gitea-target "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
 
-          # 🚀 Pemicu Utama: Cukup push branch main ke Gitea untuk ngebangunin main.yml nya!
           Write-Host "[INFO] Menembak branch main ke Gitea untuk memicu QA..."
           git push gitea-target main --force
 
