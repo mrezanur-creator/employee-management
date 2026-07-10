@@ -33,7 +33,7 @@ jobs:
           
           # Jalankan container baru menggunakan image terupdate dari GHCR
           Write-Host "[INFO] Menjalankan container baru..."
-          docker run -d --name employee-app-test -p 8082:8082 ghcr.io/mrezanur-creator/employee-management:latest
+          docker run -d --name employee-app-test -p 8082:8000 ghcr.io/mrezanur-creator/employee-management:latest
           
           # Kasih waktu 10 detik biar app-nya bener-bener up & port 8082 siap menerima request
           Start-Sleep -Seconds 10
