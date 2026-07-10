@@ -55,10 +55,10 @@ spec:
 
 strategy:
   canary:
-  {{- if .Values.rollout.canary.enabled }}
+  {{ if .Values.rollout.canary.enabled }}
 stableService: {{ include "employee-management-chart.fullname" . }}
 canaryService: {{ include "employee-management-chart.fullname" . }}-canary
-  {{- end }}
+  {{ end }}
 maxSurge: {{ .Values.rollout.canary.maxSurge }}
 maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
 
