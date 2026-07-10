@@ -1,12 +1,3 @@
-name: Employee Management CD (Deploy After QA)
-
-on:
-  push:
-    branches:
-      - main
-env:
-  CHART_PATH: helm/employee-management
-
 jobs:
   deploy:
     runs-on: self-hosted
@@ -20,10 +11,19 @@ jobs:
       - name: Start Employee API App
         shell: powershell
         run: |
-          # Hapus container lama kalau ada, kalau gak ada buang errornya biar gak merah
-          docker rm -f employee-app-test 2>$null
+          # Amankan proses penghapusan container dengan try-catch agar tidak memicu error merah
+          try {
+              $containerExists = docker ps -a --filter "name=employee-app-test" --format "{{.Names}}"
+              if ($containerExists -eq "employee-app-test") {
+                  Write-Host "[INFO] Menghapus container lama..."
+                  docker rm -f employee-app-test
+              }
+          } catch {
+              Write-Host "[INFO] Tidak ada container lama yang perlu dihapus."
+          }
           
           # Jalankan container baru menggunakan image terupdate dari GHCR
+          Write-Host "[INFO] Menjalankan container baru..."
           docker run -d --name employee-app-test -p 8082:8082 ghcr.io/mrezanur-creator/employee-management:latest
           
           # Kasih waktu 10 detik biar app-nya bener-bener up & port 8082 siap menerima request
@@ -53,13 +53,13 @@ jobs:
         run: |
           # Mengambil murni angka versi dari tag pengirim (misal qa-1.0.107 -> ambil 1.0.107)
           $fullTag = "$env:GITHUB_REF_NAME"
-          $ver =$fullTag.Replace("qa-", "").Trim()
+          $ver = $fullTag.Replace("qa-", "").Trim()
           $deployTagName = "deploy-$ver"
           
           Write-Host "[SUCCESS] Testing Aman! Mengirim tag balasan resmi: $deployTagName ke repo reza..."
           
-          # Hapus remote lama jika ada biar gak konflik pas di-run berulang kali
-          git remote remove reza-repo 2>$null
+          # Gunakan try-catch lagi untuk membuang remote lama tanpa memicu NativeCommandError
+          try { git remote remove reza-repo } catch {}
           
           # Inject Auth ke remote gitea repo reza
           git remote add reza-repo "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
@@ -68,4 +68,4 @@ jobs:
           git tag $deployTagName
           git push reza-repo $deployTagName
           
-          Write-Host "🏓 BOLA DIKEMBALIKAN! Repo reza akan otomatis melanjutkan proses Deploy &
+          Write-Host "🏓 BOLA DIKEMBALIKAN! Repo reza akan otomatis melanjutkan proses Deploy!"

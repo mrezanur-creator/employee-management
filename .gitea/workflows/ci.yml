@@ -137,30 +137,17 @@ jobs:
           }
           cd ..
 
-      - name: Trigger QA Pipeline via Git Tag
+      - name: Trigger QA Pipeline via Branch Push
         shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          
-          # 1. Ambil nomor versi otomatis dari step sebelumnya
-          $ver = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
-          $tagName = "qa-$ver"
-          
-          # 2. Setup Remote Gitea Target
-          git remote remove gitea-target
+          # 1. Setup Remote Gitea Target
+          try { git remote remove gitea-target } catch {}
           git remote add gitea-target "http://tim-qa:${env:GITEA_TOKEN}@gitea.local.env:8081/reza/employee-management2.git"
-          
-          # 🚀 STRATEGI SAKTI: Push kodingan/branch main dulu ke Gitea biar file main.yml sinkron!
-          Write-Host "[INFO] Sinkronisasi file workflow ke branch main Gitea..."
+
+          # 🚀 Pemicu Utama: Cukup push branch main ke Gitea untuk ngebangunin main.yml nya!
+          Write-Host "[INFO] Menembak branch main ke Gitea untuk memicu QA..."
           git push gitea-target main --force
-          
-          # 3. Baru setelah itu buat tag lokal di atas commit yang sudah sinkron
-          Write-Host "[INFO] Membuat Git Tag lokal baru untuk QA: $tagName..."
-          git tag $tagName
-          
-          # 4. Push tag spesifik ke remote Gitea
-          git push gitea-target $tagName
-          
-          Write-Host "[SUCCESS] Branch dan Tag $tagName berhasil dipush! Pintu Gitea QA otomatis berputar!"
+
+          Write-Host "🟢 [SUCCESS] Kodingan terdorong ke Gitea! Robot QA pasti jalan."
