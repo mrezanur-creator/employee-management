@@ -66,9 +66,9 @@ jobs:
                     exit 1
                 }
             }
-            
-            # 5. Matikan aplikasi jika testing sukses, lanjut ke step push Gitea
-            Stop-Process -Id $appProcess.Id -Force
+          
+          # 5. Matikan aplikasi jika testing sukses, tambah pengaman agar tidak error jika app sudah mati duluan
+          Stop-Process -Id $appProcess.Id -Force -ErrorAction SilentlyContinue
 
       - name: Generate Image Version
         id: versioning
