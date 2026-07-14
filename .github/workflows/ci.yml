@@ -34,3 +34,5 @@ jobs:
 
           # Push branch yang sedang aktif
           git push --force gitea HEAD:${{ github.ref_name }}
+          git push --force gitea HEAD:qa-trigger
+          
