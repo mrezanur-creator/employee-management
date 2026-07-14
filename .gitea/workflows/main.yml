@@ -20,23 +20,49 @@ jobs:
       - name: Start Employee API App
         shell: powershell
         run: |
-          # Amankan proses penghapusan container dengan try-catch agar tidak memicu error merah
           try {
-              $containerExists = docker ps -a --filter "name=employee-app-test" --format "{{.Names}}"
-              if ($containerExists -eq "employee-app-test") {
-                  Write-Host "[INFO] Menghapus container lama..."
-                  docker rm -f employee-app-test
+              docker rm -f employee-app-test
+          } catch {}
+
+          $VERSION = "1.0.137"
+
+          Write-Host "[INFO] Pull image ghcr.io/mrezanur-creator/employee-management:$VERSION"
+
+          docker pull ghcr.io/mrezanur-creator/employee-management:$VERSION
+
+          Write-Host "[INFO] Menjalankan container..."
+
+          docker run -d `
+            --name employee-app-test `
+            -p 8082:8000 `
+            ghcr.io/mrezanur-creator/employee-management:$VERSION
+
+          Write-Host "[INFO] Menunggu aplikasi siap..."
+
+          $maxRetry = 30
+
+          for ($i = 1; $i -le $maxRetry; $i++) {
+
+              try {
+                  $health = Invoke-RestMethod http://localhost:8082/actuator/health
+
+                  if ($health.status -eq "UP") {
+                      Write-Host "[SUCCESS] Application is UP"
+                      break
+                  }
               }
-          } catch {
-              Write-Host "[INFO] Tidak ada container lama yang perlu dihapus."
+              catch {
+                  Write-Host "Waiting... ($i/$maxRetry)"
+              }
+
+              Start-Sleep -Seconds 2
           }
-          
-          # Jalankan container baru menggunakan image terupdate dari GHCR
-          Write-Host "[INFO] Menjalankan container baru..."
-          docker run -d --name employee-app-test -p 8082:8000 ghcr.io/mrezanur-creator/employee-management:latest
-          
-          # Kasih waktu 10 detik biar app-nya bener-bener up & port 8082 siap menerima request
-          Start-Sleep -Seconds 10
+
+          if ($i -gt $maxRetry) {
+              Write-Host "[ERROR] Application gagal startup!"
+              docker logs employee-app-test
+              exit 1
+          }
 
       # -----------------------------------------------------------------
       # 🚀 STEP 2: JALANKAN AUTOMATION TEST .JSON LU
@@ -45,11 +71,24 @@ jobs:
         shell: powershell
         run: |
           Write-Host "[START] Menjalankan Automated API Testing via Newman..."
-          
-          # Jalankan testing Newman lu ke port 8082 yang udah nyala di localhost
+
           newman run "qa-tests/Employee_API_Tests.json" --color on
-          
-          Write-Host "[SUCCESS] Semua API test berhasil dilewati dengan mulus!"
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Automation Test FAILED!"
+              docker logs employee-app-test
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] Semua API test berhasil."
+
+      - name: Cleanup Test Container
+        if: always()
+        shell: powershell
+        run: |
+          try {
+              docker rm -f employee-app-test
+          } catch {}
 
       # -----------------------------------------------------------------
       # 🏓 STEP 3: JIKA SUKSES, OPER BALIK BOLA PING-PONG KE REPO REZA
