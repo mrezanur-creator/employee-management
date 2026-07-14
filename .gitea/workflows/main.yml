@@ -2,8 +2,8 @@ name: Employee Management CD (Deploy After QA)
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "qa-*"
 env:
   CHART_PATH: helm/employee-management
 
@@ -20,11 +20,9 @@ jobs:
       - name: Start Employee API App
         shell: powershell
         run: |
-          try {
-              docker rm -f employee-app-test
-          } catch {}
-
-          $VERSION = "1.0.137"
+          $VERSION = "${{ github.ref_name }}".Replace("qa-", "").Trim()
+  
+          Write-Host "[INFO] Version = $VERSION"
 
           Write-Host "[INFO] Pull image ghcr.io/mrezanur-creator/employee-management:$VERSION"
 
