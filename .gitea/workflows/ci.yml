@@ -105,23 +105,20 @@ jobs:
         run: |
           $VERSION = "${{ steps.versioning.outputs.IMAGE_VERSION }}"
           $TAG = "qa-$VERSION"
-
+      
           git config --global user.email "ci-bot@gitea.local"
           git config --global user.name "CI Bot"
-
+      
           Write-Host "[INFO] Membuat tag $TAG"
-
-          # Hapus tag lokal jika sudah ada
-          git tag -d $TAG 2>$null
-
-          # Buat tag baru
+      
           git tag $TAG
-
+      
           Write-Host "[INFO] Push tag $TAG"
-
+      
           git push origin $TAG
-
+      
           Write-Host "[SUCCESS] QA Trigger berhasil."
+
       - name: Update Helm Files (values & Chart)
         shell: powershell
         run: |
